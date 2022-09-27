@@ -153,6 +153,7 @@ struct Triangle {
 struct Ray {
 	glm::vec3 origin;
 	glm::vec3 dir;
+	glm::vec3 invDir;
 };
 
 struct Path {

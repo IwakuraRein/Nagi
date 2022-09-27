@@ -4,12 +4,25 @@
 
 namespace nagi {
 
+	// with reference to https://tavianator.com/2011/ray_box.html
 	__device__ bool rayBoxIntersect(const Ray r, const BoundingBox bbox, float* dist) {
-		// assume r.dir will never have 0
-		glm::vec3 tmin0 = (bbox.min - r.origin) / r.dir;
-		glm::vec3 tmax0 = (bbox.max - r.origin) / r.dir;
-		float tmin = glm::max(tmin0.x, glm::max(tmin0.y, tmin0.z));
-		float tmax = glm::min(tmax0.x, glm::min(tmax0.y, tmax0.z));
+		float tx1 = (bbox.min.x - r.origin.x) * r.invDir.x;
+		float tx2 = (bbox.max.x - r.origin.x) * r.invDir.x;
+		
+		float tmin = glm::min(tx1, tx2);
+		float tmax = glm::max(tx1, tx2);
+		
+		float ty1 = (bbox.min.y - r.origin.y) * r.invDir.y;
+		float ty2 = (bbox.max.y - r.origin.y) * r.invDir.y;
+
+		tmin = glm::max(tmin, glm::min(ty1, ty2));
+		tmax = glm::min(tmax, glm::max(ty1, ty2));
+
+		float tz1 = (bbox.min.z - r.origin.z) * r.invDir.z;
+		float tz2 = (bbox.max.z - r.origin.z) * r.invDir.z;
+
+		tmin = glm::max(tmin, glm::min(tz1, tz2));
+		tmax = glm::min(tmax, glm::max(tz1, tz2));
 
 		if (tmax > 0 && tmax > tmin) {
 			*dist = tmin;

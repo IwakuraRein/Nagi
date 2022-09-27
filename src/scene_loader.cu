@@ -8,8 +8,9 @@ inline bool objComp(const Object& o1, const Object& o2) { return o1.mtlIdx < o2.
 
 inline void updateTrigBoundingBox(Triangle& trig) {
 	// use epsilon to avoid bounding box having 0 volume.
-	trig.bbox.min = glm::min(trig.vert0.position, glm::min(trig.vert1.position, trig.vert2.position))-FLT_EPSILON;
-	trig.bbox.max = glm::max(trig.vert0.position, glm::max(trig.vert1.position, trig.vert2.position))+FLT_EPSILON;
+	// FLT_EPSILON isn't enough. try using a larger number.
+	trig.bbox.min = glm::min(trig.vert0.position, glm::min(trig.vert1.position, trig.vert2.position)) - /*FLT_EPSILON*/ 0.01f;
+	trig.bbox.max = glm::max(trig.vert0.position, glm::max(trig.vert1.position, trig.vert2.position)) + /*FLT_EPSILON*/ 0.01f;
 }
 
 inline void updateBoundingBox(const Vertex& vert, BoundingBox& bbox) {
@@ -326,12 +327,12 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, const Transform& p
 	// move everything to world space and update bounding boxes
 	for (int i = meshTrigIdx.x; i <= meshTrigIdx.y; i++) {
 		Triangle& trig = scene.trigBuf[i];
-		vecTransform(&trig.vert0.position, parentTransform.transformMat);
-		vecTransform(&trig.vert1.position, parentTransform.transformMat);
-		vecTransform(&trig.vert2.position, parentTransform.transformMat);
-		vecTransform(&trig.vert0.normal, parentTransform.transformMat, 0.f);
-		vecTransform(&trig.vert1.normal, parentTransform.transformMat, 0.f);
-		vecTransform(&trig.vert2.normal, parentTransform.transformMat, 0.f);
+		vecTransform2(&trig.vert0.position, parentTransform.transformMat);
+		vecTransform2(&trig.vert1.position, parentTransform.transformMat);
+		vecTransform2(&trig.vert2.position, parentTransform.transformMat);
+		vecTransform2(&trig.vert0.normal, parentTransform.transformMat, 0.f);
+		vecTransform2(&trig.vert1.normal, parentTransform.transformMat, 0.f);
+		vecTransform2(&trig.vert2.normal, parentTransform.transformMat, 0.f);
 		trig.vert0.normal = glm::normalize(trig.vert0.normal);
 		trig.vert1.normal = glm::normalize(trig.vert1.normal);
 		trig.vert2.normal = glm::normalize(trig.vert2.normal);

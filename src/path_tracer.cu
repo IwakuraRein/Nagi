@@ -74,7 +74,8 @@ __global__ void kernInitializeRays(Path* rayPool, int maxBounce, const Camera ca
 	float halfh = tan(cam.fov / 2);
 	float halfw = halfh * cam.aspect;
 	path.ray.dir = cam.screenOrigin - cam.upDir * (py * cam.pixelHeight + cam.pixelHeight / 2) + cam.rightDir * (px * cam.pixelWidth + cam.pixelWidth / 2);
-	path.ray.dir = glm::normalize(path.ray.dir + FLT_EPSILON); // we don't allow dir to be parallel to the axises
+	path.ray.dir = glm::normalize(path.ray.dir);
+	path.ray.invDir = 1.f / path.ray.dir;
 	rayPool[idx] = path;
 }
 
@@ -94,26 +95,24 @@ __global__ void kernTest(Path* rayPool, Triangle* trigBuf, int num, float* frame
 	float dist;
 	float minDist{ FLT_MAX };
 	Triangle picked;
-	glm::vec3 pickedNormal{ 0.f };
 	for (int i = 0; i < num; i++) {
 		Triangle trig = trigBuf[i];
-		//if (rayBoxIntersect(r, trig.bbox, &dist)) {
-		//	frameBuffer[idx * 3] = 1.f;
-		//	frameBuffer[idx * 3 + 1] = 1.f;
-		//	frameBuffer[idx * 3 + 2] = 1.f;
-		//	return;
-		//}
-		if (rayTrigIntersect(r, trig, &dist, &normal)) {
-			if (dist < minDist) {
-				minDist = dist;
-				picked = trig;
-				pickedNormal = normal;
-			}
+		if (rayBoxIntersect(r, trig.bbox, &dist)) {
+			//if (dist < minDist) {
+			//	minDist = dist;
+			//	picked = trig;
+			//}
+			frameBuffer[idx * 3] = dist;
+			frameBuffer[idx * 3 + 1] = dist;
+			frameBuffer[idx * 3 + 2] = dist;
+			return;
 		}
 	}
-	frameBuffer[idx * 3] = (pickedNormal.x + 1.f) / 2.f;
-	frameBuffer[idx * 3 + 1] = (pickedNormal.y + 1.f) / 2.f;
-	frameBuffer[idx * 3 + 2] = (pickedNormal.z + 1.f) / 2.f;
+	//if (rayTrigIntersect(r, picked, &dist, &normal)) {
+	//	frameBuffer[idx * 3] = (normal.x + 1.f) / 2.f;
+	//	frameBuffer[idx * 3 + 1] = (normal.y + 1.f) / 2.f;
+	//	frameBuffer[idx * 3 + 2] = (normal.z + 1.f) / 2.f;
+	//}
 }
 
 void PathTracer::test1(float* frameBuffer) {

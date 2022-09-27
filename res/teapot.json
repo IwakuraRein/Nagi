@@ -30,7 +30,7 @@
                 0,
                 0
             ],
-            "mesh": "cube",
+            "mesh": "teapot",
             "material": "teapot"
         }
 	},
