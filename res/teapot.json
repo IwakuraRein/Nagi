@@ -1,0 +1,51 @@
+{
+    "graphics": {
+        "sample rate":1,
+        "max bounce": 32,
+        "alpha": 1.0,
+        "gamma": 1.0
+    },
+	
+    "materials": {
+        "teapot": {
+            "type": "Opaque",
+            "albedo": [
+                0.63,
+                0.065,
+                0.05
+            ]
+        }
+	},
+ "objects": {
+        "teapot": {
+			"position": [
+				0, 0, 0],
+            "scale": [
+                0.2,
+                0.2,
+                0.2
+            ],
+            "rotation": [
+                0,
+                0,
+                0
+            ],
+            "mesh": "cube",
+            "material": "teapot"
+        }
+	},
+	    "cameras": {
+		"position": [
+			0,
+			0,
+			6.8
+		],
+		"forward": [
+			0, 0, -1
+		],
+		"up": [
+			0, 1, 0
+		],
+		"fov": 19.5
+	}
+ }

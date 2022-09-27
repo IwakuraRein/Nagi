@@ -1,17 +1,65 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="源文件">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    <Filter Include="Source">
+      <UniqueIdentifier>{02e3c89e-6ae0-4e1e-9149-30430551fabb}</UniqueIdentifier>
     </Filter>
-    <Filter Include="头文件">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    <Filter Include="Header">
+      <UniqueIdentifier>{fcfc73cc-492e-4970-8fa2-e7dd82e39036}</UniqueIdentifier>
     </Filter>
-    <Filter Include="资源文件">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="src\path_tracer.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\scene_loader.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\intersection.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\common.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\user_interface.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\bsdf.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\sampler.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\instantiate.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\common.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\path_tracer.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\scene_loader.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\intersection.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\user_interface.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bsdf.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\sampler.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
