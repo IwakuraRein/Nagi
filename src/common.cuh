@@ -1,5 +1,5 @@
-#ifndef COMMON_HPP
-#define COMMON_HPP
+#ifndef COMMON_CUH
+#define COMMON_CUH
 
 #define GLM_COORDINATE_SYSTEM GLM_RIGHT_HANDED
 #define GLM_FORCE_RADIANS
@@ -29,10 +29,17 @@
 #include <exception>
 
 // predefined values
-#define PI 3.14159265358979323846264338327950288f
-#define HALF_PI 1.57079632679489661923132169163975144f
-#define QUAT_PI 0.785398163397448309615660845819875721f
-#define INV_PI 0.318309886183790671537767526745028724f
+#define PI         3.14159265358979323846264338327950288f
+#define TWO_PI     6.28318530717958647692528676655900576f
+#define HALF_PI    1.57079632679489661923132169163975144f
+#define QUAT_PI    0.785398163397448309615660845819875721f
+#define INV_PI     0.318309886183790671537767526745028724f
+#define INV_TWO_PI 0.159154943091895335768883763372514362f
+#define INV_SQRT_THREE 0.577350269189625764509148780501957456f
+
+#define MTL_TYPE_OPAQUE 0
+#define MTL_TYPE_TRANSPARENT 1
+#define MTL_TYPE_LIGHT_SOURCE 2
 
 // CUDA 11.3 has added device code support for new C++ keywords: `constexpr` and `auto`.
 // In CUDA C++, `__device__` and `__constant__` variables can now be declared `constexpr`.
@@ -150,6 +157,7 @@ struct Vertex {
 };
 
 struct Triangle {
+	int mtlIdx;
 	Vertex vert0;
 	Vertex vert1;
 	Vertex vert2;
@@ -167,6 +175,7 @@ struct Path {
 	glm::vec3 color;
 	int remainingBounces;
 	int pixelIdx;
+	int lastHit;
 };
 
 struct Object {
@@ -178,9 +187,9 @@ struct Object {
 };
 
 struct Material {
-	bool isLightSource;
+	int type;
 	glm::vec3 albedo;
-	float emission;
+	glm::vec3 emission;
 	float transparent;
 	float roughness;
 	float metalness;
@@ -188,8 +197,8 @@ struct Material {
 };
 
 struct Configuration {
-	float spp;
-	float maxBounce;
+	int spp;
+	int maxBounce;
 	float alpha;
 	float gamma;
 };
@@ -221,4 +230,4 @@ extern Scene scene; // global variable
 
 }
 
-#endif // !COMMON_HPP
+#endif // !COMMON_CUH

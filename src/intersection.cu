@@ -37,8 +37,9 @@ namespace nagi {
 		if (glm::intersectRayTriangle(
 				r.origin, r.dir, triangle.vert0.position, triangle.vert1.position, triangle.vert2.position, baryCoord, *dist)) {
 			*normal = baryCoord.x * triangle.vert0.normal + baryCoord.y * triangle.vert1.normal + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.normal;
-			if (glm::dot(*normal, r.dir) < 0) // angle > 90
+			if (glm::dot(*normal, r.dir) < 0) { // angle > 90
 				return true;
+			}
 			else return false;
 		}
 		else return false;

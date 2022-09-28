@@ -1,12 +1,12 @@
-#ifndef USER_INTERFACE_HPP
-#define USER_INTERFACE_HPP
+#ifndef USER_INTERFACE_CUH
+#define USER_INTERFACE_CUH
 
 #include "common.cuh"
 
 namespace nagi {
 
-	bool savePNG(const unsigned char* buffer, int channels = 4, const std::string& folderPath = "./");
-	bool saveHDR(const float* buffer, const int channels, const std::string& folderPath = "./");
+	bool savePNG(const unsigned char* buffer, int channels = 4, const std::string& filePath = "./nagi_result_");
+	bool saveHDR(const float* buffer, const int channels, const std::string& filePath = "./nagi_result_");
 }
 
-#endif // !USER_INTERFACE_HPP
+#endif // !USER_INTERFACE_CUH

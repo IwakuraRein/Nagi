@@ -1,7 +1,7 @@
 {
     "graphics": {
-        "sample rate":1,
-        "max bounce": 32,
+        "sample rate": 256,
+        "max bounce": 64,
         "alpha": 1.0,
         "gamma": 1.0
     },
@@ -63,14 +63,8 @@
             ]
         },
         "LightPanel": {
-            "type": "Non Reflective",
-            "albedo": [
-                0.7083,
-                0.5,
-                0.167
-            ],
-            "emission": 5.0,
-			"light source": true
+            "type": "Light Source",
+            "emission": [17,12,4]
         }
     },
     "objects": {

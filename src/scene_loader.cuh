@@ -1,5 +1,5 @@
-#ifndef SCENE_LOADER_HPP
-#define SCENE_LOADER_HPP
+#ifndef SCENE_LOADER_CUH
+#define SCENE_LOADER_CUH
 
 #include "common.cuh"
 
@@ -17,7 +17,7 @@ public:
 	static nlohmann::json readJson(const std::string& filePath);
 
 	void load();
-	glm::ivec2 loadMesh(const std::string& meshPath, const Transform& parentTransform, BoundingBox& bbox);
+	glm::ivec2 loadMesh(const std::string& meshPath, Object& obj);
 	void loadConfig();
 	void loadMaterials();
 	void loadObjects();
@@ -34,4 +34,4 @@ public:
 
 }
 
-#endif // !SCENE_HPP
+#endif // !SCENE_LOADER_CUH

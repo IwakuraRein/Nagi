@@ -1,5 +1,5 @@
-#ifndef INTERSECTION_HPP
-#define INTERSECTION_HPP
+#ifndef INTERSECTION_CUH
+#define INTERSECTION_CUH
 
 #include "common.cuh"
 
@@ -18,4 +18,4 @@ __device__ bool boxBoxIntersect(const BoundingBox& b1, const BoundingBox& b2);
 }
 
 
-#endif // !INTERSECTION_HPP
+#endif // !INTERSECTION_CUH

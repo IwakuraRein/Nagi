@@ -9,8 +9,8 @@ inline bool objComp(const Object& o1, const Object& o2) { return o1.mtlIdx < o2.
 inline void updateTrigBoundingBox(Triangle& trig) {
 	// use epsilon to avoid bounding box having 0 volume.
 	// FLT_EPSILON isn't enough. try using a larger number.
-	trig.bbox.min = glm::min(trig.vert0.position, glm::min(trig.vert1.position, trig.vert2.position)) - /*FLT_EPSILON*/ 0.01f;
-	trig.bbox.max = glm::max(trig.vert0.position, glm::max(trig.vert1.position, trig.vert2.position)) + /*FLT_EPSILON*/ 0.01f;
+	trig.bbox.min = glm::min(trig.vert0.position, glm::min(trig.vert1.position, trig.vert2.position)) - /*FLT_EPSILON*/ 0.0001f;
+	trig.bbox.max = glm::max(trig.vert0.position, glm::max(trig.vert1.position, trig.vert2.position)) + /*FLT_EPSILON*/ 0.0001f;
 }
 
 inline void updateBoundingBox(const Vertex& vert, BoundingBox& bbox) {
@@ -54,20 +54,12 @@ void SceneLoader::loadConfig() {
 	for (auto& item : jFile["graphics"].items()) {
 		if (item.key() == "alpha")
 			scene.config.alpha = item.value();
-		else
-			scene.config.alpha = 1.0;
 		if (item.key() == "gamma")
 			scene.config.gamma = item.value();
-		else
-			scene.config.gamma = 1.0;
 		if (item.key() == "sample rate")
 			scene.config.spp = item.value();
-		else
-			scene.config.spp = 64;
 		if (item.key() == "max bounce")
 			scene.config.maxBounce = item.value();
-		else
-			scene.config.maxBounce = 32;
 	}
 	if (printDetails) std::cout << " done." << std::endl;
 }
@@ -80,6 +72,20 @@ void SceneLoader::loadMaterials() {
 		auto& items = material.value();
 		Material mtl;
 		{
+			if (hasItem(items, "type")) {
+				std::string type = items["type"];
+				if (type == "Opaque") {
+					mtl.type = MTL_TYPE_OPAQUE;
+				}
+				else if (type == "Transparent") {
+					mtl.type = MTL_TYPE_TRANSPARENT;
+				}
+				else if (type == "Light Source") {
+					mtl.type = MTL_TYPE_LIGHT_SOURCE;
+				}
+				else throw std::runtime_error("Error: Unknown material type.");
+			}
+			else throw std::runtime_error("Error: Material must specify its type.");
 			if (hasItem(items, "albedo")) {
 				auto& albedo = items["albedo"];
 				mtl.albedo = glm::vec3{ albedo[0], albedo[1], albedo[2] };
@@ -107,15 +113,11 @@ void SceneLoader::loadMaterials() {
 			else
 				mtl.ior = 1.f;
 			if (hasItem(items, "emission")) {
-				mtl.emission = items["emission"];
+				auto& emission = items["emission"];
+				mtl.emission = glm::vec3{ emission[0], emission[1], emission[2] };
 			}
 			else
-				mtl.emission = 1.f;
-			if (hasItem(items, "light source")) {
-				mtl.isLightSource = items["light source"];
-			}
-			else
-				mtl.isLightSource = false;
+				mtl.emission = glm::vec3{ 0.f };
 		}
 		scene.mtlBuf[idx] = std::move(mtl);
 		mtlIndices.emplace(material.key(), idx);
@@ -152,6 +154,13 @@ void SceneLoader::loadObjects() {
 
 			updateTransformMat(&obj.transform);
 
+			if (hasItem(items, "material")) {
+				if (hasItem(mtlIndices, items["material"]))
+					obj.mtlIdx = mtlIndices[items["material"]];
+				else throw std::runtime_error("Error: Specified material doesn't exist.");
+			}
+			else throw std::runtime_error("Error: Object must specify its material.");
+
 			if (hasItem(items, "mesh")) {
 				std::string meshPath = items["mesh"];
 				//if (hasItem(meshIndices, items["mesh"])) {
@@ -168,7 +177,7 @@ void SceneLoader::loadObjects() {
 						else if (doesFileExist(dir + "models/" + meshPath)) meshPath = dir + "models/" + meshPath;
 						else throw std::runtime_error("Error: Model file doesn't exist.");
 					}
-					glm::ivec2 meshIdx = loadMesh(meshPath, obj.transform, obj.bbox);
+					glm::ivec2 meshIdx = loadMesh(meshPath, obj);
 					//meshIndices.emplace(items["mesh"], meshIdx);
 					obj.trigIdxStart = meshIdx.x;
 					obj.trigIdxEnd = meshIdx.y;
@@ -176,13 +185,6 @@ void SceneLoader::loadObjects() {
 
 			}
 			else throw std::runtime_error("Error: Object must specify its mesh.");
-
-			if (hasItem(items, "material")) {
-				if (hasItem(mtlIndices, items["material"]))
-					obj.mtlIdx = mtlIndices[items["material"]];
-				else throw std::runtime_error("Error: Specified material doesn't exist.");
-			}
-			else throw std::runtime_error("Error: Object must specify its material.");
 		}
 		scene.objBuf[idx++] = std::move(obj);
 		if (printDetails) std::cout << " done." << std::endl;
@@ -250,7 +252,7 @@ void SceneLoader::loadCameras() {
 	if (printDetails) std::cout << " done." << std::endl;
 }
 
-glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, const Transform& parentTransform, BoundingBox& bbox) {
+glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj) {
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
@@ -273,6 +275,7 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, const Transform& p
 			if (shape.mesh.num_face_vertices[i] != 3)
 				throw std::runtime_error("Error: Only triangle face is supported.");
 			Triangle trig;
+			trig.mtlIdx = obj.mtlIdx;
 			{ // load 3 vertices
 				const auto& vertInfo0 = shape.mesh.indices[i * 3];
 				const auto& vertInfo1 = shape.mesh.indices[i * 3 + 1];
@@ -322,17 +325,17 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, const Transform& p
 
 	meshTrigIdx.y = scene.trigBuf.size() - 1;
 
-	bbox.min = glm::vec3{ FLT_MAX };
-	bbox.max = glm::vec3{ -FLT_MAX };
+	obj.bbox.min = glm::vec3{ FLT_MAX };
+	obj.bbox.max = glm::vec3{ -FLT_MAX };
 	// move everything to world space and update bounding boxes
 	for (int i = meshTrigIdx.x; i <= meshTrigIdx.y; i++) {
 		Triangle& trig = scene.trigBuf[i];
-		vecTransform2(&trig.vert0.position, parentTransform.transformMat);
-		vecTransform2(&trig.vert1.position, parentTransform.transformMat);
-		vecTransform2(&trig.vert2.position, parentTransform.transformMat);
-		vecTransform2(&trig.vert0.normal, parentTransform.transformMat, 0.f);
-		vecTransform2(&trig.vert1.normal, parentTransform.transformMat, 0.f);
-		vecTransform2(&trig.vert2.normal, parentTransform.transformMat, 0.f);
+		vecTransform2(&trig.vert0.position, obj.transform.transformMat);
+		vecTransform2(&trig.vert1.position, obj.transform.transformMat);
+		vecTransform2(&trig.vert2.position, obj.transform.transformMat);
+		vecTransform2(&trig.vert0.normal, obj.transform.transformMat, 0.f);
+		vecTransform2(&trig.vert1.normal, obj.transform.transformMat, 0.f);
+		vecTransform2(&trig.vert2.normal, obj.transform.transformMat, 0.f);
 		trig.vert0.normal = glm::normalize(trig.vert0.normal);
 		trig.vert1.normal = glm::normalize(trig.vert1.normal);
 		trig.vert2.normal = glm::normalize(trig.vert2.normal);
@@ -342,9 +345,9 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, const Transform& p
 		updateBoundingBox(trig.vert0, scene.bbox);
 		updateBoundingBox(trig.vert1, scene.bbox);
 		updateBoundingBox(trig.vert2, scene.bbox);
-		updateBoundingBox(trig.vert0, bbox);
-		updateBoundingBox(trig.vert1, bbox);
-		updateBoundingBox(trig.vert2, bbox);
+		updateBoundingBox(trig.vert0, obj.bbox);
+		updateBoundingBox(trig.vert1, obj.bbox);
+		updateBoundingBox(trig.vert2, obj.bbox);
 	}
 
 	return meshTrigIdx;
