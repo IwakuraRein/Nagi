@@ -54,7 +54,7 @@ namespace nagi {
 
 Scene scene;
 
-__device__ __host__ void vecTransform(glm::vec3* vec, const glm::mat4 mat, float T) {
+__device__ __host__ void vecTransform(glm::vec3* vec, const glm::mat4& mat, float T) {
 	glm::vec4 tmp{ mat * glm::vec4{ *vec, T } };
 	if (glm::epsilonNotEqual(T, 0.f, FLT_EPSILON)) {
 		if (glm::epsilonNotEqual(tmp.w, 0.f, FLT_EPSILON)) {
@@ -69,7 +69,7 @@ __device__ __host__ void vecTransform(glm::vec3* vec, const glm::mat4 mat, float
 	else *vec = tmp;
 }
 
-__device__ __host__ void vecTransform2(glm::vec3* vec, const glm::mat4 mat, float T) {
+__device__ __host__ void vecTransform2(glm::vec3* vec, const glm::mat4& mat, float T) {
 	*vec = mat * glm::vec4{ *vec, T };
 }
 
@@ -78,7 +78,7 @@ __device__ __host__ void updateTransformMat(Transform* t) {
 	t->invTransformMat = glm::inverse(t->transformMat);
 }
 
-__device__ __host__ glm::mat4 getTransformMat(const glm::vec3 position, const glm::vec3 rotation, const glm::vec3 scale) {
+__device__ __host__ glm::mat4 getTransformMat(const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale) {
 	glm::mat4 mat = getRotationMat(rotation);
 	mat[0] *= scale.x;
 	mat[1] *= scale.y;
@@ -88,7 +88,7 @@ __device__ __host__ glm::mat4 getTransformMat(const glm::vec3 position, const gl
 }
 
 // rotation about euler angles. yxz
-__device__ __host__ glm::mat4 getRotationMat(const glm::vec3 rotation) {
+__device__ __host__ glm::mat4 getRotationMat(const glm::vec3& rotation) {
 	return glm::yawPitchRoll(rotation.y, rotation.x, rotation.z);
 }
 

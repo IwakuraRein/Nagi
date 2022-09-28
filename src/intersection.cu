@@ -5,24 +5,24 @@
 namespace nagi {
 
 	// with reference to https://tavianator.com/2011/ray_box.html
-	__device__ bool rayBoxIntersect(const Ray r, const BoundingBox bbox, float* dist) {
+	__device__ bool rayBoxIntersect(const Ray& r, const BoundingBox& bbox, float* dist) {
 		float tx1 = (bbox.min.x - r.origin.x) * r.invDir.x;
 		float tx2 = (bbox.max.x - r.origin.x) * r.invDir.x;
 		
-		float tmin = glm::min(tx1, tx2);
-		float tmax = glm::max(tx1, tx2);
+		float tmin = fminf(tx1, tx2);
+		float tmax = fmaxf(tx1, tx2);
 		
 		float ty1 = (bbox.min.y - r.origin.y) * r.invDir.y;
 		float ty2 = (bbox.max.y - r.origin.y) * r.invDir.y;
 
-		tmin = glm::max(tmin, glm::min(ty1, ty2));
-		tmax = glm::min(tmax, glm::max(ty1, ty2));
+		tmin = fmaxf(tmin, fminf(ty1, ty2));
+		tmax = fminf(tmax, fmaxf(ty1, ty2));
 
 		float tz1 = (bbox.min.z - r.origin.z) * r.invDir.z;
 		float tz2 = (bbox.max.z - r.origin.z) * r.invDir.z;
 
-		tmin = glm::max(tmin, glm::min(tz1, tz2));
-		tmax = glm::min(tmax, glm::max(tz1, tz2));
+		tmin = fmaxf(tmin, fminf(tz1, tz2));
+		tmax = fminf(tmax, fmaxf(tz1, tz2));
 
 		if (tmax > 0 && tmax > tmin) {
 			*dist = tmin;
@@ -32,7 +32,7 @@ namespace nagi {
 	}
 
 	__device__ bool rayTrigIntersect(
-		const Ray r, const Triangle triangle, float* dist, glm::vec3* normal) {
+		const Ray& r, const Triangle& triangle, float* dist, glm::vec3* normal) {
 		glm::vec2 baryCoord;
 		if (glm::intersectRayTriangle(
 				r.origin, r.dir, triangle.vert0.position, triangle.vert1.position, triangle.vert2.position, baryCoord, *dist)) {
@@ -44,7 +44,7 @@ namespace nagi {
 		else return false;
 	}
 
-	__device__ bool boxBoxIntersect(const BoundingBox b1, const BoundingBox b2) {
+	__device__ bool boxBoxIntersect(const BoundingBox& b1, const BoundingBox& b2) {
 		return ((vec3Comp(b1.min, b2.min) && vec3Comp(b2.min, b1.max)) ||
 			(vec3Comp(b1.min, b2.max) && vec3Comp(b2.max, b1.max)) ||
 			(vec3Comp(b2.min, b1.min) && vec3Comp(b1.min, b2.max)) ||

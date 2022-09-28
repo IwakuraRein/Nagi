@@ -25,13 +25,6 @@ int main(int argc, char* argv) {
 		//while (!pathTracer.finished()) {
 		//	pathTracer.iterate();
 		//}
-		for (auto& trig : scene.trigBuf) {
-			auto bbox = trig.bbox;
-			auto min = bbox.min;
-			auto max = bbox.max;
-			std::cout << min.x << " " << min.y << " " << min.z << " " << std::endl;
-			std::cout << max.x << " " << max.y << " " << max.z << " " << std::endl;
-		}
 	}
 	catch (std::exception e) {
 		std::cerr << e.what() << std::endl;

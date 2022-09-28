@@ -14,10 +14,6 @@
 #include <device_launch_parameters.h>
 #include <device_functions.h>
 
-#include <thrust/host_vector.h>  
-#include <thrust/device_vector.h>
-#include <thrust/scan.h>
-
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -69,6 +65,16 @@ inline void checkCUDAError2(const char* msg) {
 	}
 }
 
+inline __host__ __device__ unsigned int hash(unsigned int a) {
+	a = (a + 0x7ed55d16) + (a << 12);
+	a = (a ^ 0xc761c23c) ^ (a >> 19);
+	a = (a + 0x165667b1) + (a << 5);
+	a = (a + 0xd3a2646c) ^ (a << 9);
+	a = (a + 0xfd7046c5) + (a << 3);
+	a = (a ^ 0xb55a4f09) ^ (a >> 16);
+	return a;
+};
+
 template <typename T, typename... Rest>
 inline void hashCombine(std::size_t& seed, const T& v, Rest... rest) {
 	std::hash<T> hasher;
@@ -113,11 +119,11 @@ struct Transform {
 };
 
 __device__ __host__ glm::mat4 getTransformMat(
-	const glm::vec3 position, const glm::vec3 rotation, const glm::vec3 scale);
+	const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale);
 __device__ __host__ void updateTransformMat(Transform* t);
-__device__ __host__ glm::mat4 getRotationMat(const glm::vec3 rotation);
-__device__ __host__ void vecTransform(glm::vec3* vec, const glm::mat4 mat, float T = 1.f);
-__device__ __host__ void vecTransform2(glm::vec3* vec, const glm::mat4 mat, float T = 1.f);
+__device__ __host__ glm::mat4 getRotationMat(const glm::vec3& rotation);
+__device__ __host__ void vecTransform(glm::vec3* vec, const glm::mat4& mat, float T = 1.f);
+__device__ __host__ void vecTransform2(glm::vec3* vec, const glm::mat4& mat, float T = 1.f);
 
 struct Camera {
 	float near{ 0.01f };
@@ -158,7 +164,7 @@ struct Ray {
 
 struct Path {
 	Ray ray;
-	glm::vec3 energy;
+	glm::vec3 color;
 	int remainingBounces;
 	int pixelIdx;
 };
