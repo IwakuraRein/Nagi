@@ -5,7 +5,7 @@ namespace nagi {
 
 std::unique_ptr<float[]> Denoiser::denoise() {
 	if (!devDenoised) {
-		cudaMalloc((void**)&devDenoised, sizeof(float) * PIXEL_COUNT * 3);
+		cudaMalloc((void**)&devDenoised, sizeof(float) * window.pixels * 3);
 		checkCUDAError("cudaMalloc devDenoised failed.");
 	}
 	std::cout << "Starting denoising... ";
@@ -32,9 +32,9 @@ Denoiser::~Denoiser() {
 	}
 }
 
-__global__ void kernGenerateLuminance(float* color, float* albedo) {
+__global__ void kernGenerateLuminance(WindowSize window, float* color, float* albedo) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= PIXEL_COUNT) return;
+	if (idx >= window.pixels) return;
 
 	float a1 = albedo[idx * 3] + FLT_EPSILON;
 	float a2 = albedo[idx * 3+1] + FLT_EPSILON;
@@ -44,9 +44,9 @@ __global__ void kernGenerateLuminance(float* color, float* albedo) {
 	color[idx * 3+1] /= a2;
 	color[idx * 3+2] /= a3;
 }
-__global__ void kernRetrieveColor(float* luminance, float* albedo) {
+__global__ void kernRetrieveColor(WindowSize window, float* luminance, float* albedo) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= PIXEL_COUNT) return;
+	if (idx >= window.pixels) return;
 
 	float a1 = albedo[idx * 3] + FLT_EPSILON;
 	float a2 = albedo[idx * 3 + 1] + FLT_EPSILON;
@@ -59,12 +59,12 @@ __global__ void kernRetrieveColor(float* luminance, float* albedo) {
 
 //todo: optimization with shared memeory
 __global__ void nagi::kernBilateralFilter(
-	float* denoised, float* luminance, float* normal, float* depth, float sigmaN, float sigmaZ, float sigmaL) {
+	WindowSize window, float* denoised, float* luminance, float* normal, float* depth, float sigmaN, float sigmaZ, float sigmaL) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= PIXEL_COUNT) return;
+	if (idx >= window.pixels) return;
 
-	int py = idx / WINDOW_WIDTH;
-	int px = idx - py * WINDOW_HEIGHT;
+	int py = idx / window.width;
+	int px = idx - py * window.width;
 
 	int pixels[FILTER_SIZE_SQUARE];
 
@@ -79,12 +79,12 @@ __global__ void nagi::kernBilateralFilter(
 	for (int i = -FILTER_SIZE_HALF; i <= FILTER_SIZE_HALF; i++) {
 #pragma unroll
 		for (int j = -FILTER_SIZE_HALF; j <= FILTER_SIZE_HALF; j++) {
-			int p = WINDOW_WIDTH * (py + i) + px + j;
+			int p = window.width * (py + i) + px + j;
 			if (p == idx) {
 				out += thisL;
 				wSum += 1.f;
 			}
-			else if (p >=0 && p < PIXEL_COUNT) {
+			else if (p >=0 && p < window.pixels) {
 				glm::vec3 n{ normal[p * 3], normal[p * 3 + 1], normal[p * 3 + 2] };
 				glm::vec3 l{ luminance[p * 3], luminance[p * 3 + 1], luminance[p * 3 + 2] };
 				float z = depth[p];
@@ -109,19 +109,19 @@ __global__ void nagi::kernBilateralFilter(
 
 // todo: bilateral filter will introduce aliasing at edges (as they appear in gbuffers). still don't know how to solve it.
 std::unique_ptr<float[]> Denoiser::bilateralFilter(float* frameBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
-	dim3 blocksPerGrid((PIXEL_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE);
+	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
-	kernGenerateLuminance<<<blocksPerGrid, BLOCK_SIZE>>>(frameBuf, albedoBuf);
+	kernGenerateLuminance<<<blocksPerGrid, BLOCK_SIZE>>>(window, frameBuf, albedoBuf);
 	checkCUDAError("kernGenerateLuminance failed.");
 
-	kernBilateralFilter << <blocksPerGrid, BLOCK_SIZE >> > (devDenoised, frameBuf, normalBuf, depthBuf, 64.f, 1.f, 4.f);
+	kernBilateralFilter <<<blocksPerGrid, BLOCK_SIZE >>>(window, devDenoised, frameBuf, normalBuf, depthBuf, 64.f, 1.f, 4.f);
 	checkCUDAError("kernBilateralFilter failed.");
 
-	kernRetrieveColor << <blocksPerGrid, BLOCK_SIZE >> > (devDenoised, albedoBuf);
+	kernRetrieveColor <<<blocksPerGrid, BLOCK_SIZE >>>(window, devDenoised, albedoBuf);
 	checkCUDAError("kernRetrieveColor failed.");
 
-	std::unique_ptr<float[]> denoised{ new float[PIXEL_COUNT * 3] };
-	cudaMemcpy(denoised.get(), devDenoised, sizeof(float) * PIXEL_COUNT * 3, cudaMemcpyDeviceToHost);
+	std::unique_ptr<float[]> denoised{ new float[window.pixels * 3] };
+	cudaMemcpy(denoised.get(), devDenoised, sizeof(float) * window.pixels * 3, cudaMemcpyDeviceToHost);
 	checkCUDAError("cudaMemcpy devDenoised failed.");
 
 	return denoised;
@@ -129,15 +129,15 @@ std::unique_ptr<float[]> Denoiser::bilateralFilter(float* frameBuf, float* albed
 
 std::unique_ptr<float[]>  Denoiser::openImageDenoiser(float* devFrameBuf, float* devAlbedoBuf, float* devNormalBuf) {
 	// oidn only supports cpu
-	std::unique_ptr<float[]> frameBuf{ new float[PIXEL_COUNT * 3] };
-	std::unique_ptr<float[]> albedoBuf{ new float[PIXEL_COUNT * 3] };
-	std::unique_ptr<float[]> normalBuf{ new float[PIXEL_COUNT * 3] };
-	std::unique_ptr<float[]> denoisedBuf{ new float[PIXEL_COUNT * 3] };
-	cudaMemcpy(frameBuf.get(), devFrameBuf, sizeof(float) * PIXEL_COUNT * 3, cudaMemcpyDeviceToHost);
+	std::unique_ptr<float[]> frameBuf{ new float[window.pixels * 3] };
+	std::unique_ptr<float[]> albedoBuf{ new float[window.pixels * 3] };
+	std::unique_ptr<float[]> normalBuf{ new float[window.pixels * 3] };
+	std::unique_ptr<float[]> denoisedBuf{ new float[window.pixels * 3] };
+	cudaMemcpy(frameBuf.get(), devFrameBuf, sizeof(float) * window.pixels * 3, cudaMemcpyDeviceToHost);
 	checkCUDAError("cudaMemcpy devFrameBuf failed.");
-	cudaMemcpy(albedoBuf.get(), devAlbedoBuf, sizeof(float) * PIXEL_COUNT * 3, cudaMemcpyDeviceToHost);
+	cudaMemcpy(albedoBuf.get(), devAlbedoBuf, sizeof(float) * window.pixels * 3, cudaMemcpyDeviceToHost);
 	checkCUDAError("cudaMemcpy devAlbedoBuf failed.");
-	cudaMemcpy(normalBuf.get(), devNormalBuf, sizeof(float) * PIXEL_COUNT * 3, cudaMemcpyDeviceToHost);
+	cudaMemcpy(normalBuf.get(), devNormalBuf, sizeof(float) * window.pixels * 3, cudaMemcpyDeviceToHost);
 	checkCUDAError("cudaMemcpy devNormalBuf failed.");
 
 	auto device = oidn::newDevice();
@@ -145,10 +145,10 @@ std::unique_ptr<float[]>  Denoiser::openImageDenoiser(float* devFrameBuf, float*
 
 	// Create a filter for denoising a beauty (color) image using optional auxiliary images too
 	auto filter = device.newFilter("RT"); // generic ray tracing filter
-	filter.setImage("color", frameBuf.get(), oidn::Format::Float3, WINDOW_WIDTH, WINDOW_HEIGHT); // beauty
-	filter.setImage("albedo", albedoBuf.get(), oidn::Format::Float3, WINDOW_WIDTH, WINDOW_HEIGHT); // auxiliary
-	filter.setImage("normal", normalBuf.get(), oidn::Format::Float3, WINDOW_WIDTH, WINDOW_HEIGHT); // auxiliary
-	filter.setImage("output", denoisedBuf.get(), oidn::Format::Float3, WINDOW_WIDTH, WINDOW_HEIGHT); // denoised beauty
+	filter.setImage("color", frameBuf.get(), oidn::Format::Float3, window.width, window.height); // beauty
+	filter.setImage("albedo", albedoBuf.get(), oidn::Format::Float3, window.width, window.height); // auxiliary
+	filter.setImage("normal", normalBuf.get(), oidn::Format::Float3, window.width, window.height); // auxiliary
+	filter.setImage("output", denoisedBuf.get(), oidn::Format::Float3, window.width, window.height); // denoised beauty
 	filter.set("hdr", true); // beauty image is HDR
 	filter.commit();
 

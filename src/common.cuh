@@ -40,16 +40,18 @@
 #define MTL_TYPE_TRANSPARENT 1
 #define MTL_TYPE_LIGHT_SOURCE 2
 
+#define BLOCK_SIZE 128
+
 // CUDA 11.3 has added device code support for new C++ keywords: `constexpr` and `auto`.
 // In CUDA C++, `__device__` and `__constant__` variables can now be declared `constexpr`.
 // The constexpr variables can be used in constant expressions, where they are evaluated at
 // compile time, or as normal variables in contexts where constant expressions are not required.
-constexpr int BLOCK_SIZE = 128;
-constexpr int WINDOW_WIDTH = 1024;
-constexpr int WINDOW_HEIGHT = 1024;
-constexpr int PIXEL_COUNT = WINDOW_WIDTH * WINDOW_HEIGHT;
-constexpr float INV_WIDTH = 1.f / WINDOW_WIDTH;
-constexpr float INV_HEIGHT = 1.f / WINDOW_HEIGHT;
+//constexpr int BLOCK_SIZE = 128;
+//constexpr int WINDOW_WIDTH = 1024;
+//constexpr int WINDOW_HEIGHT = 1024;
+//constexpr int PIXEL_COUNT = WINDOW_WIDTH * WINDOW_HEIGHT;
+//constexpr float INV_WIDTH = 1.f / WINDOW_WIDTH;
+//constexpr float INV_HEIGHT = 1.f / WINDOW_HEIGHT;
 
 // help functions
 inline void checkCUDAError(const char* msg) {
@@ -104,10 +106,6 @@ std::string strLeftStrip(const std::string& str, const std::string& strip);
 
 std::string strRightStrip(const std::string& str, const std::string& strip);
 
-inline int pixel2Dto1D(int x, int y) {
-	return y * WINDOW_WIDTH + x;
-}
-
 #ifndef hasItem(X, Y)
 #define hasItem(X, Y) (X.find(Y) != X.end())
 #endif
@@ -134,13 +132,14 @@ __device__ __host__ void vecTransform2(glm::vec3* vec, const glm::mat4& mat, flo
 struct Camera {
 	float near{ 0.01f };
 	float far{ 1000.f };
-	float fov{ 60.f };
-	float aspect{ WINDOW_WIDTH / WINDOW_HEIGHT };
+	float fov{ 1.04719755f };
+	float aspect{ 1.77777777777778f };
 	glm::vec3 position{ 0.f, 0.f, 0.f };
 	glm::vec3 upDir{ 0.f, -1.f, 0.f };
 	glm::vec3 rightDir{ 1.f, 0.f, 0.f };
 	glm::vec3 forwardDir{ 0.f, 0.f, 1.f };
 
+	// float's precision is not enough for computing ndc
 	glm::vec3 screenOrigin;
 	float pixelWidth, pixelHeight, halfPixelWidth, halfPixelHeight;
 };
@@ -195,12 +194,21 @@ struct Material {
 	float ior;
 };
 
+struct WindowSize {
+	int width{ 1280 };
+	int height{ 720 };
+	int pixels{ 921600 };
+	float invWidth{ 0.00078125 };
+	float invHeight{ 0.00138888888888889f };
+};
+
 struct Configuration {
-	int spp;
-	int maxBounce;
-	int denoiser;
-	float alpha;
-	float gamma;
+	WindowSize window;
+	int spp{ 64 };
+	int maxBounce{ 64 };
+	int denoiser{ 2 };
+	float alpha{ 1.f };
+	float gamma{ 1.f };
 };
 
 struct Scene {

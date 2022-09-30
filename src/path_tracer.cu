@@ -18,9 +18,9 @@ void PathTracer::initialize() {
 	cudaMemcpy(devTrigBuf, scene.trigBuf.data(), scene.trigBuf.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
 	checkCUDAError("cudaMemcpy devTrigBuf failed.");
 
-	// no need to clear frame buffer now. kernWriteFrameBuffer() will do this when spp=1
-	//dim3 blocksPerGrid((PIXEL_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	//kernInitializeFrameBuffer<<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuf);
+	// no need to clear frame buffer. kernWriteFrameBuffer() will do this when spp=1
+	//dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
+	//kernInitializeFrameBuffer<<<blocksPerGrid, BLOCK_SIZE>>>(window, devFrameBuf);
 	//checkCUDAError("kernInitializeFrameBuffer failed.");
 }
 
@@ -31,23 +31,23 @@ void PathTracer::allocateBuffers() {
 	checkCUDAError("cudaMalloc devMtlBuf failed.");
 	cudaMalloc((void**)&devTrigBuf, scene.trigBuf.size() * sizeof(Triangle));
 	checkCUDAError("cudaMalloc devTrigBuf failed.");
-	cudaMalloc((void**)&devFrameBuf, sizeof(float) * PIXEL_COUNT * 3);
+	cudaMalloc((void**)&devFrameBuf, sizeof(float) * window.pixels * 3);
 	checkCUDAError("cudaMalloc devFrameBuf failed.");
-	cudaMalloc((void**)&devNormalBuf, sizeof(float) * PIXEL_COUNT * 3);
+	cudaMalloc((void**)&devNormalBuf, sizeof(float) * window.pixels * 3);
 	checkCUDAError("cudaMalloc devNormalBuf failed.");
-	cudaMalloc((void**)&devAlbedoBuf, sizeof(float) * PIXEL_COUNT * 3);
+	cudaMalloc((void**)&devAlbedoBuf, sizeof(float) * window.pixels * 3);
 	checkCUDAError("cudaMalloc devAlbedoBuf failed.");
-	cudaMalloc((void**)&devDepthBuf, sizeof(float) * PIXEL_COUNT);
+	cudaMalloc((void**)&devDepthBuf, sizeof(float) * window.pixels);
 	checkCUDAError("cudaMalloc devDepthBuf failed.");
-	cudaMalloc((void**)&devRayPool1, PIXEL_COUNT * sizeof(Path));
+	cudaMalloc((void**)&devRayPool1, window.pixels * sizeof(Path));
 	checkCUDAError("cudaMalloc devRayPool1 failed.");
-	cudaMalloc((void**)&devRayPool2, PIXEL_COUNT * sizeof(Path));
+	cudaMalloc((void**)&devRayPool2, window.pixels * sizeof(Path));
 	checkCUDAError("cudaMalloc devRayPool2 failed.");
-	cudaMalloc((void**)&devTerminatedRays, PIXEL_COUNT * sizeof(Path));
+	cudaMalloc((void**)&devTerminatedRays, window.pixels * sizeof(Path));
 	checkCUDAError("cudaMalloc devTerminatedRays failed.");
-	cudaMalloc((void**)&devResults1, PIXEL_COUNT * sizeof(IntersectInfo));
+	cudaMalloc((void**)&devResults1, window.pixels * sizeof(IntersectInfo));
 	checkCUDAError("cudaMalloc devResults1 failed.");
-	cudaMalloc((void**)&devResults2, PIXEL_COUNT * sizeof(IntersectInfo));
+	cudaMalloc((void**)&devResults2, window.pixels * sizeof(IntersectInfo));
 	checkCUDAError("cudaMalloc devResults2 failed.");
 }
 
@@ -127,11 +127,11 @@ void PathTracer::iterate() {
 	for (int spp = 0; spp < scene.config.spp; spp ++) {
 		std::cout << "  Begin iteration " << spp << ". " << scene.config.spp - spp << " remaining." << std::endl;
 		if (printDetails) timer2 = std::chrono::high_resolution_clock::now();
-		dim3 blocksPerGrid((PIXEL_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE);
-		kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>>(spp, devRayPool1, scene.config.maxBounce, scene.cam, hasGbuffer);
+		dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
+		kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>>(window, spp, devRayPool1, scene.config.maxBounce, scene.cam, hasGbuffer);
 		checkCUDAError("kernInitializeRays failed.");
 
-		int remainingRays = PIXEL_COUNT;
+		int remainingRays = window.pixels;
 		while (true) {
 			remainingRays = intersectionTest(remainingRays);
 			if (remainingRays <= 0) break;
@@ -358,15 +358,14 @@ int PathTracer::compactRays(int rayNum, Path* rayPool, Path* compactedRayPool) {
 	//return 0;
 }
 
-//__global__ void kernInitializeRays(Path* rayPool, int maxBounce, const glm::vec3 camPos, const glm::mat4 invProjViewMat) {
-__global__ void kernInitializeRays(int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter) {
+__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= PIXEL_COUNT) return;
-	float rnd1 = 0.f;
-	float rnd2 = 0.f;
+	if (idx >= window.pixels) return;
+	float rnd1 = 0.0;
+	float rnd2 = 0.0;
 	if (jitter) {
 		thrust::default_random_engine rng = makeSeededRandomEngine(spp, idx, 0);
-		thrust::uniform_real_distribution<float> u01(-0.5f, 0.5f);
+		thrust::uniform_real_distribution<double> u01(-0.5f, 0.5f);
 		rnd1 = u01(rng);
 		rnd2 = u01(rng);
 	}
@@ -376,18 +375,15 @@ __global__ void kernInitializeRays(int spp, Path* rayPool, int maxBounce, const 
 	path.remainingBounces = maxBounce;
 	path.ray.origin = cam.position;
 
-	int py = idx / WINDOW_WIDTH;
-	int px = idx - py * WINDOW_HEIGHT;
+	int py = idx / window.width;
+	int px = idx - py * window.width;
 
-	//todo: add jitter
 	//glm::vec3 ndc{ -1.f + px * PIXEL_WIDTH + HALF_PIXEL_WIDTH, -1.f + py * PIXEL_HEIGHT + HALF_PIXEL_HEIGHT, 0.5f };
 	//vecTransform(&ndc, cam.invProjectMat*cam.invViewMat);
 	//glm::vec3 dir = ndc - cam.position;
-	float halfh = tan(cam.fov / 2);
-	float halfw = halfh * cam.aspect;
 	path.ray.dir = cam.screenOrigin
-		- cam.upDir * (((float)py + rnd1) * cam.pixelHeight + cam.pixelHeight / 2)
-		+ cam.rightDir * (((float)px + rnd2) * cam.pixelWidth + cam.pixelWidth / 2);
+		- cam.upDir * ((float)py + rnd1) * cam.pixelHeight + cam.halfPixelHeight
+		+ cam.rightDir * ((float)px + rnd2) * cam.pixelWidth + cam.halfPixelWidth;
 	path.ray.dir = glm::normalize(path.ray.dir);
 	path.ray.invDir = 1.f / path.ray.dir;
 	path.lastHit = 1;
@@ -395,17 +391,17 @@ __global__ void kernInitializeRays(int spp, Path* rayPool, int maxBounce, const 
 	rayPool[idx] = path;
 }
 
-__global__ void kernInitializeFrameBuffer(float* frame) {
+__global__ void kernInitializeFrameBuffer(WindowSize window, float* frame) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= PIXEL_COUNT) return;
+	if (idx >= window.pixels) return;
 	frame[idx * 3] = 0.f;
 	frame[idx * 3 + 1] = 0.f;
 	frame[idx * 3 + 2] = 0.f;
 }
 
-__global__ void kernWriteFrameBuffer(float currentSpp, Path* rayPool, float* frameBuffer) {
+__global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* rayPool, float* frameBuffer) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= PIXEL_COUNT) return;
+	if (idx >= window.pixels) return;
 
 	Path path = rayPool[idx];
 	if (path.lastHit < 0) { // ray didn't hit anything, or didn't hit light source in the end
@@ -420,14 +416,14 @@ __global__ void kernWriteFrameBuffer(float currentSpp, Path* rayPool, float* fra
 }
 
 void PathTracer::writeFrameBuffer(int spp) {
-	dim3 blocksPerGrid((PIXEL_COUNT + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernWriteFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>((float)scene.config.spp, devTerminatedRays, devFrameBuf);
+	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
+	kernWriteFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(window, (float)scene.config.spp, devTerminatedRays, devFrameBuf);
 
 }
 
 //__global__ void kernTest(Path* rayPool, Triangle* trigBuf, int num, float* frameBuffer) {
 //	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-//	if (idx >= PIXEL_COUNT) return;
+//	if (idx >= window.pixels) return;
 //	Ray r = rayPool[idx].ray;
 //	glm::vec3 normal;
 //	glm::vec3 pickedNormal{ 0.f, 0.f, 0.f };
@@ -455,8 +451,8 @@ void PathTracer::writeFrameBuffer(int spp) {
 
 std::unique_ptr<float[]> PathTracer::getFrameBuffer() {
 	if (devFrameBuf) {
-		std::unique_ptr<float[]> ptr{ new float[PIXEL_COUNT * 3] };
-		cudaMemcpy(ptr.get(), devFrameBuf, PIXEL_COUNT * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+		std::unique_ptr<float[]> ptr{ new float[window.pixels * 3] };
+		cudaMemcpy(ptr.get(), devFrameBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost);
 		return ptr;
 	}
 	else {
@@ -465,7 +461,7 @@ std::unique_ptr<float[]> PathTracer::getFrameBuffer() {
 }
 void PathTracer::copyFrameBuffer(float* frameBuffer) {
 	if (devFrameBuf) {
-		cudaMemcpy(frameBuffer, devFrameBuf, PIXEL_COUNT * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(frameBuffer, devFrameBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost);
 	}
 	else {
 		throw std::runtime_error("Error: Frame buffer isn't allocated yet.");
@@ -473,8 +469,8 @@ void PathTracer::copyFrameBuffer(float* frameBuffer) {
 }
 std::unique_ptr<float[]> PathTracer::getNormalBuffer() {
 	if (devNormalBuf) {
-		std::unique_ptr<float[]> ptr{ new float[PIXEL_COUNT * 3] };
-		cudaMemcpy(ptr.get(), devNormalBuf, PIXEL_COUNT * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+		std::unique_ptr<float[]> ptr{ new float[window.pixels * 3] };
+		cudaMemcpy(ptr.get(), devNormalBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost);
 		return ptr;
 	}
 	else {
@@ -483,8 +479,8 @@ std::unique_ptr<float[]> PathTracer::getNormalBuffer() {
 }
 std::unique_ptr<float[]> PathTracer::getAlbedoBuffer() {
 	if (devAlbedoBuf) {
-		std::unique_ptr<float[]> ptr{ new float[PIXEL_COUNT * 3] };
-		cudaMemcpy(ptr.get(), devAlbedoBuf, PIXEL_COUNT * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+		std::unique_ptr<float[]> ptr{ new float[window.pixels * 3] };
+		cudaMemcpy(ptr.get(), devAlbedoBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost);
 		return ptr;
 	}
 	else {
@@ -493,8 +489,8 @@ std::unique_ptr<float[]> PathTracer::getAlbedoBuffer() {
 }
 std::unique_ptr<float[]> PathTracer::getDepthBuffer() {
 	if (devDepthBuf) {
-		std::unique_ptr<float[]> ptr{ new float[PIXEL_COUNT] };
-		cudaMemcpy(ptr.get(), devDepthBuf, PIXEL_COUNT * sizeof(float), cudaMemcpyDeviceToHost);
+		std::unique_ptr<float[]> ptr{ new float[window.pixels] };
+		cudaMemcpy(ptr.get(), devDepthBuf, window.pixels * sizeof(float), cudaMemcpyDeviceToHost);
 		return ptr;
 	}
 	else {

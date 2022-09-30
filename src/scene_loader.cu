@@ -51,18 +51,27 @@ void SceneLoader::load() {
 
 void SceneLoader::loadConfig() {
 	if (printDetails) std::cout << "  Loading configuration... ";
+	Configuration config{};
 	for (auto& item : jFile["graphics"].items()) {
+		if (item.key() == "resolution") {
+			config.window.width = item.value()[0];
+			config.window.height = item.value()[1];
+			config.window.pixels = config.window.width * config.window.height;
+			config.window.invWidth = 1.f / (float)config.window.width;
+			config.window.invHeight = 1.f / (float)config.window.height;
+		}
 		if (item.key() == "alpha")
-			scene.config.alpha = item.value();
+			config.alpha = item.value();
 		if (item.key() == "gamma")
-			scene.config.gamma = item.value();
+			config.gamma = item.value();
 		if (item.key() == "sample rate")
-			scene.config.spp = item.value();
+			config.spp = item.value();
 		if (item.key() == "max bounce")
-			scene.config.maxBounce = item.value();
+			config.maxBounce = item.value();
 		if (item.key() == "denoiser")
-			scene.config.denoiser = item.value();
+			config.denoiser = item.value();
 	}
+	scene.config = config;
 	if (printDetails) std::cout << " done." << std::endl;
 }
 
@@ -200,40 +209,35 @@ void SceneLoader::loadObjects() {
 
 void SceneLoader::loadCameras() {
 	if (printDetails) std::cout << "  Loading camera... ";
-	Camera& cam = scene.cam;
+	Camera cam{};
 	auto& camera = jFile["cameras"];
 	if (hasItem(camera, "position")) {
 		auto& position = camera["position"];
 		cam.position = glm::vec3{ position[0], position[1], position[2] };
 	}
-	else cam.position = glm::vec3{ 0.f, 0.f, 0.f };
 
 	if (hasItem(camera, "fov")) {
 		cam.fov = glm::radians((float)camera["fov"]);
 	}
-	else cam.fov = glm::radians(60.f);
 
 	if (hasItem(camera, "near")) {
 		cam.near = camera["near"];
 	}
-	else cam.near = 0.01f;
 
 	if (hasItem(camera, "far")) {
 		cam.far = camera["far"];
 	}
-	else cam.far = 1000.f;
 
 	if (hasItem(camera, "aspect")) {
 		if (camera["aspect"] <= 0.f) throw std::runtime_error("Error: Camera aspect must be postive.");
 		cam.aspect = camera["aspect"];
 	}
-	else cam.aspect = WINDOW_WIDTH / WINDOW_HEIGHT;
+	else cam.aspect = (float)scene.config.window.width * scene.config.window.invHeight;
 
 	if (hasItem(camera, "up")) {
 		auto& up = camera["up"];
 		cam.upDir = glm::normalize(glm::vec3{ up[0], up[1], up[2] });
 	}
-	else cam.upDir = glm::vec3{ 0.f, -1.f, 0.f };
 	if (hasItem(camera, "forward")) {
 		auto& forward = camera["forward"];
 		cam.forwardDir = glm::normalize(glm::vec3{ forward[0], forward[1], forward[2] });
@@ -242,16 +246,16 @@ void SceneLoader::loadCameras() {
 		auto& lookAt = camera["look at"];
 		cam.forwardDir = glm::normalize(glm::vec3{ lookAt[0], lookAt[1], lookAt[2] } - cam.position);
 	}
-	else cam.forwardDir = glm::vec3{ 0.f, 0.f, 1.f };
 	cam.rightDir = glm::normalize(glm::cross(cam.forwardDir, cam.upDir));
 
-	float halfh = tan(cam.fov / 2);
+	// multiplying a large number works around the insufficiency of float precision
+	float halfh = tan(cam.fov / 2) * 10000.f;
 	float halfw = halfh * cam.aspect;
-	cam.screenOrigin = cam.forwardDir - cam.rightDir * halfw + cam.upDir * halfh;
-	cam.pixelHeight = halfh * 2.f * INV_HEIGHT;
-	cam.pixelWidth = halfw * 2.f * INV_WIDTH;
-	cam.halfPixelHeight = cam.pixelHeight / 2.f;
-	cam.halfPixelWidth = cam.pixelWidth / 2.f;
+	cam.screenOrigin = cam.forwardDir * 10000.f - cam.rightDir * halfw + cam.upDir * halfh;
+	cam.pixelHeight = halfh * 2.f / scene.config.window.height;
+	cam.pixelWidth = halfw * 2.f / scene.config.window.width;
+
+	scene.cam = cam;
 
 	if (printDetails) std::cout << " done." << std::endl;
 }

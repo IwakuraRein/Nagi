@@ -11,12 +11,12 @@
 *.sln.docstates
 nagi_result*.hdr
 nagi_result*.png
-depth_*.hdr
-depth_*.png
-normal_*.hdr
-normal_*.png
-albedo_.hdr
-albedo_.png
+depth*.hdr
+depth*.png
+normal*.hdr
+normal*.png
+albedo*.hdr
+albedo*.png
 
 
 # User-specific files (MonoDevelop/Xamarin Studio)

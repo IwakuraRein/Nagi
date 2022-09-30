@@ -40,17 +40,17 @@ struct IntersectionComp {
 	}
 };
 
-__global__ void kernInitializeFrameBuffer(float* frame);
-__global__ void kernInitializeRays(int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter);
+__global__ void kernInitializeFrameBuffer(WindowSize window, float* frame);
+__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter);
 __global__ void kernIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, Triangle* trigBuf, IntersectInfo* out);
 __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out);
 __global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
-__global__ void kernWriteFrameBuffer(float currentSpp, Path* rayPool, float* frameBuffer);
+__global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* rayPool, float* frameBuffer);
 __global__ void kernGenerateGbuffer(int rayNum, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
 
 class PathTracer {
 public:
-	PathTracer(Scene& Scene) :scene{ Scene } {}
+	PathTracer(Scene& Scene) :scene{ Scene }, window{ Scene.config.window } {}
 	~PathTracer();
 	PathTracer(const PathTracer&) = delete;
 	void operator=(const PathTracer&) = delete;
@@ -83,6 +83,7 @@ public:
 
 	bool printDetails{ false };
 	Scene& scene;
+	WindowSize& window;
 	bool hasGbuffer{ false };
 
 	// ping-pong buffers

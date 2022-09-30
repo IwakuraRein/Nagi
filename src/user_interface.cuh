@@ -5,8 +5,8 @@
 
 namespace nagi {
 
-bool savePNG(const unsigned char* buffer, int channels = 4, const std::string& filePath = "./nagi_result_", bool timestamp = true);
-bool saveHDR(const float* buffer, const int channels, const std::string& filePath = "./nagi_result_", bool timestamp = true);
+bool savePNG(const WindowSize& window, const unsigned char* buffer, int channels = 4, const std::string& filePath = "./nagi_result_", bool timestamp = true);
+bool saveHDR(const WindowSize& window, const float* buffer, const int channels, const std::string& filePath = "./nagi_result_", bool timestamp = true);
 
 }
 

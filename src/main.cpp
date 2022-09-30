@@ -20,13 +20,17 @@ int main(int argc, char* argv[]) {
 		pathTracer.initialize();
 		pathTracer.iterate();
 		auto frameBuf = pathTracer.getFrameBuffer();
-		saveHDR(frameBuf.get(), 3);
-		saveHDR(frameBuf.get(), 3, "./nagi_result_");
+		saveHDR(scene.config.window, frameBuf.get(), 3);
+
+		auto normal = pathTracer.getNormalBuffer();
+		saveHDR(scene.config.window, normal.get(), 3, "./normal_");
+		auto albedo = pathTracer.getAlbedoBuffer();
+		saveHDR(scene.config.window, albedo.get(), 3, "./albedo_");
 
 		if (scene.config.denoiser != 0) {
 			Denoiser denoiser(scene, pathTracer);
 			auto denoisedFrameBuf = denoiser.denoise();
-			saveHDR(denoisedFrameBuf.get(), 3, "./nagi_result_denoised_");
+			saveHDR(scene.config.window, denoisedFrameBuf.get(), 3, "./nagi_result_denoised_");
 		}
 		//std::unique_ptr<float[]> denoisedBuf{ new float[PIXEL_COUNT * 3] };
 

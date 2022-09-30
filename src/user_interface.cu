@@ -5,7 +5,7 @@
 
 namespace nagi {
 
-	bool savePNG(const unsigned char* buffer, const int channels, const std::string& filePath, bool timestamp) {
+	bool savePNG(const WindowSize& window, const unsigned char* buffer, const int channels, const std::string& filePath, bool timestamp) {
 		time_t t = time(0);
 		char timeStamp[32] = { NULL };
 		if (timestamp)
@@ -19,7 +19,7 @@ namespace nagi {
 			return false;
 		}
 
-		if (stbi_write_png(fileName.c_str(), WINDOW_WIDTH, WINDOW_HEIGHT, channels, buffer, 0) == 0) {
+		if (stbi_write_png(fileName.c_str(), window.width, window.height, channels, buffer, 0) == 0) {
 			std::cerr << "Error: Faild to save png file " << fileName << "." << std::endl;
 			return false;
 		}
@@ -27,7 +27,7 @@ namespace nagi {
 		return true;
 	}
 
-	bool saveHDR(const float* buffer, const int channels, const std::string& filePath, bool timestamp) {
+	bool saveHDR(const WindowSize& window, const float* buffer, const int channels, const std::string& filePath, bool timestamp) {
 		time_t t = time(0);
 		char timeStamp[32] = { NULL };
 		if (timestamp)
@@ -41,7 +41,7 @@ namespace nagi {
 			return false;
 		}
 
-		if (stbi_write_hdr(fileName.c_str(), WINDOW_WIDTH, WINDOW_HEIGHT, channels, buffer) == 0) {
+		if (stbi_write_hdr(fileName.c_str(), window.width, window.height, channels, buffer) == 0) {
 			std::cerr << "Error: Faild to save hdr file " << fileName << "." << std::endl;
 			return false;
 		}
