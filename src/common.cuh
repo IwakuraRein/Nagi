@@ -35,7 +35,6 @@
 #define QUAT_PI    0.785398163397448309615660845819875721f
 #define INV_PI     0.318309886183790671537767526745028724f
 #define INV_TWO_PI 0.159154943091895335768883763372514362f
-#define INV_SQRT_THREE 0.577350269189625764509148780501957456f
 
 #define MTL_TYPE_OPAQUE 0
 #define MTL_TYPE_TRANSPARENT 1
@@ -199,6 +198,7 @@ struct Material {
 struct Configuration {
 	int spp;
 	int maxBounce;
+	int denoiser;
 	float alpha;
 	float gamma;
 };

@@ -1,16 +1,17 @@
 #include "user_interface.cuh"
 
 #include <stb_image_write.h>
-
 #include <ctime>
 
 namespace nagi {
 
-	bool savePNG(const unsigned char* buffer, const int channels, const std::string& filePath) {
+	bool savePNG(const unsigned char* buffer, const int channels, const std::string& filePath, bool timestamp) {
 		time_t t = time(0);
 		char timeStamp[32] = { NULL };
-		strftime(timeStamp, sizeof(timeStamp), "%Y-%m-%d_%H-%M-%S", localtime(&t));
+		if (timestamp)
+			strftime(timeStamp, sizeof(timeStamp), "%Y-%m-%d_%H-%M-%S", localtime(&t));
 		std::string fileName{ filePath };
+		strRightStrip(fileName, ".png");
 		fileName += timeStamp;
 		fileName += ".png";
 		if (doesFileExist(fileName)) {
@@ -26,11 +27,13 @@ namespace nagi {
 		return true;
 	}
 
-	bool saveHDR(const float* buffer, const int channels, const std::string& filePath) {
+	bool saveHDR(const float* buffer, const int channels, const std::string& filePath, bool timestamp) {
 		time_t t = time(0);
 		char timeStamp[32] = { NULL };
-		strftime(timeStamp, sizeof(timeStamp), "%Y-%m-%d_%H-%M-%S", localtime(&t));
+		if (timestamp)
+			strftime(timeStamp, sizeof(timeStamp), "%Y-%m-%d_%H-%M-%S", localtime(&t));
 		std::string fileName{ filePath };
+		strRightStrip(fileName, ".hdr");
 		fileName += timeStamp;
 		fileName += ".hdr";
 		if (doesFileExist(fileName)) {

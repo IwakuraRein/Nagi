@@ -9,7 +9,15 @@
 *.user
 *.userosscache
 *.sln.docstates
-nagi_result*
+nagi_result*.hdr
+nagi_result*.png
+depth_*.hdr
+depth_*.png
+normal_*.hdr
+normal_*.png
+albedo_.hdr
+albedo_.png
+
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

@@ -5,6 +5,8 @@
 
 #include <thrust/random.h>
 
+#define INV_SQRT_THREE 0.577350269189625764509148780501957456f
+
 namespace nagi {
 
 __device__ __host__

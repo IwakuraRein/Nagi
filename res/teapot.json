@@ -1,6 +1,6 @@
 {
     "graphics": {
-        "sample rate": 64,
+        "sample rate": 32,
         "max bounce": 64,
         "alpha": 1.0,
         "gamma": 1.0
@@ -151,15 +151,15 @@
 		"teapot":{
             "rotation": [
                 0,
-                0.2,
+                0,
                 0
             ],
             "scale": [
                 0.6,
-                0.4,
+                0.6,
                 0.6
             ],
-            "mesh": "cube",
+            "mesh": "teapot",
             "material": "teapot"
 		},
         "LightPanel": {

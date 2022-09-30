@@ -60,6 +60,8 @@ void SceneLoader::loadConfig() {
 			scene.config.spp = item.value();
 		if (item.key() == "max bounce")
 			scene.config.maxBounce = item.value();
+		if (item.key() == "denoiser")
+			scene.config.denoiser = item.value();
 	}
 	if (printDetails) std::cout << " done." << std::endl;
 }
@@ -181,6 +183,8 @@ void SceneLoader::loadObjects() {
 					//meshIndices.emplace(items["mesh"], meshIdx);
 					obj.trigIdxStart = meshIdx.x;
 					obj.trigIdxEnd = meshIdx.y;
+					obj.bbox.min -= 0.0001f;
+					obj.bbox.max += 0.0001f;
 				//}
 
 			}

@@ -8,11 +8,6 @@
 
 namespace nagi {
 
-// if the ray hit objects whose bounding boxes that are intersected with each other, we record up to 4 objects
-constexpr int objIntersectTestBufSize = 4;
-// if the ray hit triangles whose bounding boxes that are intersected with each other, we record up to 16 triangles
-constexpr int trigIntersectTestBufSize = 16;
-
 struct IntersectInfo {
 	glm::vec3 position;
 	glm::vec3 normal;
@@ -39,37 +34,19 @@ struct ifNotTerminated {
 		return x.remainingBounces > 0;
 	}
 };
-struct ifNonNegtive {
-	__host__ __device__ bool operator()(const int& x) {
-		return x >= 0;
-	}
-}; 
-struct ifNegtive {
-	__host__ __device__ bool operator()(const int& x) {
-		return x < 0;
-	}
-}; 
 struct IntersectionComp {
 	__host__ __device__ bool operator()(const IntersectInfo& a, const IntersectInfo& b) {
 		return (a.mtlIdx < b.mtlIdx);
 	}
 };
-//struct ObjectIntersectInfo {
-//	int objIdx[objIntersectTestBufSize];
-//	int num;
-//};
-//struct TriangleIntersectInfo {
-//	int trigIdx[trigIntersectTestBufSize];
-//	glm::vec3 normals[trigIntersectTestBufSize];
-//	int num;
-//};
 
 __global__ void kernInitializeFrameBuffer(float* frame);
-__global__ void kernInitializeRays(int spp, Path* rayPool, int maxBounce, const Camera cam);
-//__global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, int* hitMtlIdx);
+__global__ void kernInitializeRays(int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter);
+__global__ void kernIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, Triangle* trigBuf, IntersectInfo* out);
 __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out);
 __global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
-__global__ void kernWriteFrameBuffer(float spp, Path* rayPool, float* frameBuffer);
+__global__ void kernWriteFrameBuffer(float currentSpp, Path* rayPool, float* frameBuffer);
+__global__ void kernGenerateGbuffer(int rayNum, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
 
 class PathTracer {
 public:
@@ -89,18 +66,24 @@ public:
 	// compute color and generate new rays
 	int shade(int rayNum, int spp);
 
+	void generateGbuffer(int rayNum);
+
 	// delete rays whose flag is negetive
 	int compactRays(int rayNum, Path* rayPool, Path* compactedRayPool);
 	// delete rays that didn't hit triangles
 	int compactRays(int rayNum, Path* rayPool, Path* compactedRayPool, IntersectInfo* intersectResults, IntersectInfo* compactedIntersectResults);
 
-	void writeFrameBuffer();
+	void writeFrameBuffer(int spp);
 
 	std::unique_ptr<float[]> getFrameBuffer();
-	const float* const getDevFrameBuffer() const { return devFrameBuf; }
+	void copyFrameBuffer(float* frameBuffer);
+	std::unique_ptr<float[]> getNormalBuffer();
+	std::unique_ptr<float[]> getAlbedoBuffer();
+	std::unique_ptr<float[]> getDepthBuffer();
 
 	bool printDetails{ false };
 	Scene& scene;
+	bool hasGbuffer{ false };
 
 	// ping-pong buffers
 	Path* devRayPool1{ nullptr };
@@ -117,6 +100,9 @@ public:
 	Triangle* devTrigBuf{ nullptr };
 	// The frame buffer is a rectangle of pixels stored from left-to-right, top-to-bottom.
 	float* devFrameBuf{ nullptr };
+	float* devNormalBuf{ nullptr };
+	float* devAlbedoBuf{ nullptr };
+	float* devDepthBuf{ nullptr };
 };
 
 }
