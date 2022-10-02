@@ -53,28 +53,45 @@ __device__ __host__ bool boxBoxIntersect(const BoundingBox& a, const BoundingBox
 	//	(vec3Comp(b1.min, b2.max) && vec3Comp(b2.max, b1.max)) ||
 	//	(vec3Comp(b2.min, b1.min) && vec3Comp(b1.min, b2.max)) ||
 	//	(vec3Comp(b2.min, b1.max) && vec3Comp(b1.max, b2.max)));
-	const float dx1 = a.min.x - b.max.x;
-	const float dx2 = b.min.x - a.max.x;
-	const float dy1 = a.min.y - b.max.y;
-	const float dy2 = b.min.y - a.max.y;
-	const float dz1 = a.min.z - b.max.z;
-	const float dz2 = b.min.z - a.max.z;
 
-	return (dx1 <= 0 && dx2 <= 0) &&
-		(dy1 <= 0 && dy2 <= 0) &&
-		(dz1 <= 0 && dz2 <= 0);
+	const glm::vec3 amin{ a.min - b.center };
+	const glm::vec3 amax{ a.max - b.center };
+	if (amin.x > b.halfExtent.x || amax.x < -b.halfExtent.x ||
+		amin.y > b.halfExtent.y || amax.y < -b.halfExtent.y ||
+		amin.z > b.halfExtent.z || amax.z < -b.halfExtent.z)
+		return false;
+
+	return true;
 }
 
 // reference: https://gdbooks.gitbooks.io/3dcollisions/content/Chapter4/aabb-triangle.html
+//            https://fileadmin.cs.lth.se/cs/Personal/Tomas_Akenine-Moller/code/tribox2.txt
+inline __device__ __host__ bool axisProjectTest(
+	const glm::vec3& v0, const glm::vec3& v1, const glm::vec3& v2, 
+	const glm::vec3& u0, const glm::vec3& u1, const glm::vec3& u2, 
+	const glm::vec3& e, const glm::vec3& axis) {
+	float p0 = glm::dot(v0, axis);
+	float p1 = glm::dot(v1, axis);
+	float p2 = glm::dot(v2, axis);
+	float r = e.x * fabsf(glm::dot(u0, axis)) +
+		e.y * fabsf(glm::dot(u1, axis)) +
+		e.z * fabsf(glm::dot(u2, axis));
+
+	// This means BOTH of the points of the projected triangle
+	// are outside the projected half-length of the AABB
+	// Therefore the axis is seperating and we can exit
+	return fmaxf(-fmaxf(p0, p1, p2), fminf(p0, p1, p2)) > r;
+}
 __device__ __host__ bool tirgBoxIntersect(const Triangle& t, const BoundingBox& b) {
 	glm::vec3 v0 = t.vert0.position - b.center;
 	glm::vec3 v1 = t.vert1.position - b.center;
 	glm::vec3 v2 = t.vert2.position - b.center;
-	glm::vec3 e = b.halfExtent * 2.f;
+	glm::vec3 extent = b.max - b.min;
 
-	const glm::vec3 f0{ v0 - v1};
-	const glm::vec3 f1{ v1 - v2};
-	const glm::vec3 f2{ v2 - v0};
+	const glm::vec3 e0{ v1 - v0 };
+	const glm::vec3 e1{ v2 - v1 };
+	const glm::vec3 e2{ v0 - v2 };
+	const glm::vec3 n{ glm::cross(e0, e1) };
 
 	const glm::vec3 u0{ 1.0f, 0.0f, 0.0f };
 	const glm::vec3 u1{ 0.0f, 1.0f, 0.0f };
@@ -84,32 +101,51 @@ __device__ __host__ bool tirgBoxIntersect(const Triangle& t, const BoundingBox& 
 	// cross product combinations of the edges of the triangle
 	// and the edges of the AABB.
 
-	const glm::vec3 axis_u0_f0 = glm::cross(u0, f0);
-	const glm::vec3 axis_u0_f1 = glm::cross(u0, f1);
-	const glm::vec3 axis_u0_f2 = glm::cross(u0, f2);
+	const glm::vec3 axis_u0_e0 = glm::cross(u0, e0);
+	const glm::vec3 axis_u0_e1 = glm::cross(u0, e1);
+	const glm::vec3 axis_u0_e2 = glm::cross(u0, e2);
 
-	const glm::vec3 axis_u1_f0 = glm::cross(u1, f0);
-	const glm::vec3 axis_u1_f1 = glm::cross(u1, f1);
-	const glm::vec3 axis_u1_f2 = glm::cross(u2, f2);
+	const glm::vec3 axis_u1_e0 = glm::cross(u1, e0);
+	const glm::vec3 axis_u1_e1 = glm::cross(u1, e1);
+	const glm::vec3 axis_u1_e2 = glm::cross(u2, e2);
 
-	const glm::vec3 axis_u2_f0 = glm::cross(u2, f0);
-	const glm::vec3 axis_u2_f1 = glm::cross(u2, f1);
-	const glm::vec3 axis_u2_f2 = glm::cross(u2, f2);
+	const glm::vec3 axis_u2_e0 = glm::cross(u2, e0);
+	const glm::vec3 axis_u2_e1 = glm::cross(u2, e1);
+	const glm::vec3 axis_u2_e2 = glm::cross(u2, e2);
 
-	// Testing axis: axis_u0_f0
-	float p0 = glm::dot(t.vert0.position, axis_u0_f0);
-	float p1 = glm::dot(t.vert1.position, axis_u0_f0);
-	float p2 = glm::dot(t.vert2.position, axis_u0_f0);
-	float r = e.x * fabsf(glm::dot(u0, axis_u0_f0)) +
-		e.y * fabsf(glm::dot(u1, axis_u0_f0)) +
-		e.z * fabsf(glm::dot(u2, axis_u0_f0));
-	if (fmaxf(-fmaxf(p0, p1, p2), fminf(p0, p1, p2)) > r) {
-		// This means BOTH of the points of the projected triangle
-		// are outside the projected half-length of the AABB
-		// Therefore the axis is seperating and we can exit
-		return false;
+	// test 9 axis
+	if (axisProjectTest(v0, v1, v2, u0, u1, u2, extent, axis_u0_e0)) return false;
+	if (axisProjectTest(v0, v1, v2, u0, u1, u2, extent, axis_u0_e1)) return false;
+	if (axisProjectTest(v0, v1, v2, u0, u1, u2, extent, axis_u0_e2)) return false;
+	if (axisProjectTest(v0, v1, v2, u0, u1, u2, extent, axis_u1_e0)) return false;
+	if (axisProjectTest(v0, v1, v2, u0, u1, u2, extent, axis_u1_e1)) return false;
+	if (axisProjectTest(v0, v1, v2, u0, u1, u2, extent, axis_u1_e2)) return false;
+	if (axisProjectTest(v0, v1, v2, u0, u1, u2, extent, axis_u2_e0)) return false;
+	if (axisProjectTest(v0, v1, v2, u0, u1, u2, extent, axis_u2_e1)) return false;
+	if (axisProjectTest(v0, v1, v2, u0, u1, u2, extent, axis_u2_e2)) return false;
+
+	// test 3 box normals. equivalent to test two aabb
+	if (boxBoxIntersect(t.bbox, b)) {
+
+		// test if the box intersects the plane of the triangle
+		// compute plane equation of triangle: normal*x+d=0
+		float d = -glm::dot(n, v0);
+		glm::vec3 vmin, vmax;
+#pragma unroll
+		for (int q = 0; q <= 2; q++) {
+			if (n[q] > 0.f) {
+				vmin[q] = -b.halfExtent[q];
+				vmax[q] = b.halfExtent[q];
+			}
+			else {
+				vmin[q] = b.halfExtent[q];
+				vmax[q] = -b.halfExtent[q];
+			}
+		}
+		if (glm::dot(n, vmax) + d >= 0.f) return true;
 	}
-	return true;
+
+	return false;
 }
 
 }

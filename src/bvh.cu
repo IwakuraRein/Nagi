@@ -2,16 +2,6 @@
 
 namespace nagi {
 
-//inline __device__ __host__ bool VertInsideBox(const glm::vec3& vert, const BoundingBox& bbox) {
-//	return vec3Comp(bbox.min, vert) && vec3Comp(vert, bbox.max);
-//}
-//
-//inline __device__ __host__ bool trigVertsOutside(const Triangle& trig, const BoundingBox& bbox) {
-//	return !VertInsideBox(trig.vert0.position, bbox) && 
-//		!VertInsideBox(trig.vert1.position, bbox) && 
-//		!VertInsideBox(trig.vert2.position, bbox);
-//}
-
 BVH::~BVH() {
 	if (devTree) {
 		cudaFree(devTree);
@@ -48,69 +38,6 @@ void BVH::build() {
 		i++;
 	}
 	checkCUDAError("cudaMemcpy devTreeTrigIdx failed.");
-
-	//std::vector<int> tmp;
-	//std::cout << trigIndices->size()<<std::endl;
-	//tmp.resize(trigIndices->size());
-	//i = 0;
-	//for (auto it = trigIndices->begin(); it != trigIndices->end(); it++) {
-	//	//std::cout << *it << " ";
-	//	tmp[i] = *it;
-	//	i++;
-	//}
-	//std::cout << std::endl;
-	//for (int i = 0; i < tree.size(); i++) {
-	//	if (tree[i].trigIdxStart >= 0) {
-	//		std::cout << "Leaf:" << i << ": ";
-	//		//std::cout << tree[i].size << std::endl;
-	//		for (int j = tree[i].trigIdxStart; j < tree[i].trigIdxStart+tree[i].size; j++) {
-	//			std::cout << tmp[j] << " ";
-	//		}
-	//		std::cout << std::endl;
-	//	}
-	//	else {
-	//		std::cout << "Node:" << i << ": ";
-	//		for (int j = 0; j < tree[i].size; j++) {
-	//			std::cout << tree[i].children[j] << " ";
-	//		}
-	//		std::cout << std::endl;;
-	//	}
-	//}
-
-	//std:: vector<int>tmp2;
-	//BVH::Node stack[MAX_TREE_DEPTH + 1];
-	//int searchedChildern[MAX_TREE_DEPTH + 1] = { 0 };
-	//int ptr = 0;
-	//stack[0] = tree[rootIdx]; // root node;
-	//while (ptr >= 0) {
-	//	BVH::Node& node = stack[ptr];
-	//	if (node.trigIdxStart >= 0) { // leaf node
-	//		for (int i = node.trigIdxStart; i < node.trigIdxStart + node.size; i++) {
-	//			tmp2.push_back(tmp[i]);
-	//		}
-	//		searchedChildern[ptr] = 0;
-	//		ptr--;
-	//	}
-
-	//	else if (node.size > searchedChildern[ptr]) {
-	//		BVH::Node& child = tree[node.children[searchedChildern[ptr]]];
-	//		searchedChildern[ptr]++;
-	//		//if (child.size > 0) {
-	//			//if (rayBoxIntersect(r, child.bbox, &dist)) {
-	//				stack[ptr + 1] = child;
-	//				ptr++;
-	//			//}
-	//		//}
-	//	}
-	//	else {
-	//		searchedChildern[ptr] = 0;
-	//		ptr--;
-	//	}
-	//}
-	//for (auto i : tmp2) {
-	//	std::cout << i << " ";
-	//}
-	//std::cout << std::endl;
 
 	cudaMalloc((void**)&devTree, sizeof(Node) * tree.size());
 	checkCUDAError("cudaMalloc devTree failed.");
@@ -167,37 +94,29 @@ int BVH::buildNode(
 
 		for (auto it = trigs->begin(); it != trigs->end(); it++) {
 			Triangle t = scene.trigBuf[*it];
-			if (boxBoxIntersect(t.bbox, b0)) {
-				//if (tirgBoxIntersect(t, b0))
-					trigs0->push_back(*it);
+			if (tirgBoxIntersect(t, b0)) {
+				trigs0->push_back(*it);
 			}
-			if (boxBoxIntersect(t.bbox, b1)) {
-				//if (tirgBoxIntersect(t, b1))
-					trigs1->push_back(*it);
+			if (tirgBoxIntersect(t, b1)) {
+				trigs1->push_back(*it);
 			}
-			if (boxBoxIntersect(t.bbox, b2)) {
-				//if (tirgBoxIntersect(t, b2))
-					trigs2->push_back(*it);
+			if (tirgBoxIntersect(t, b2)) {
+				trigs2->push_back(*it);
 			}
-			if (boxBoxIntersect(t.bbox, b3)) {
-				//if (tirgBoxIntersect(t, b3))
-					trigs3->push_back(*it);
+			if (tirgBoxIntersect(t, b3)) {
+				trigs3->push_back(*it);
 			}
-			if (boxBoxIntersect(t.bbox, b4)) {
-				//if (tirgBoxIntersect(t, b4))
-					trigs4->push_back(*it);
+			if (tirgBoxIntersect(t, b4)) {
+				trigs4->push_back(*it);
 			}
-			if (boxBoxIntersect(t.bbox, b5)) {
-				//if (tirgBoxIntersect(t, b5))
-					trigs5->push_back(*it);
+			if (tirgBoxIntersect(t, b5)) {
+				trigs5->push_back(*it);
 			}
-			if (boxBoxIntersect(t.bbox, b6)) {
-				//if (tirgBoxIntersect(t, b6))
-					trigs6->push_back(*it);
+			if (tirgBoxIntersect(t, b6)) {
+				trigs6->push_back(*it);
 			}
-			if (boxBoxIntersect(t.bbox, b7)) {
-				//if (tirgBoxIntersect(t, b7))
-					trigs7->push_back(*it);
+			if (tirgBoxIntersect(t, b7)) {
+				trigs7->push_back(*it);
 			}
 		}
 
