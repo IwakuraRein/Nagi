@@ -54,62 +54,62 @@ void PathTracer::allocateBuffers() {
 void PathTracer::destroyBuffers() {
 	if (devObjBuf) {
 		cudaFree(devObjBuf);
-		checkCUDAError2("cudaFree devObjBuf failed.");
+		checkCUDAError("cudaFree devObjBuf failed.");
 		devObjBuf = nullptr;
 	}
 	if (devMtlBuf) {
 		cudaFree(devMtlBuf);
-		checkCUDAError2("cudaFree devMtlBuf failed.");
+		checkCUDAError("cudaFree devMtlBuf failed.");
 		devMtlBuf = nullptr;
 	}
 	if (devTrigBuf) {
 		cudaFree(devTrigBuf);
-		checkCUDAError2("cudaFree devTrigBuf failed.");
+		checkCUDAError("cudaFree devTrigBuf failed.");
 		devTrigBuf = nullptr;
 	}
 	if (devRayPool1) {
 		cudaFree(devRayPool1);
-		checkCUDAError2("cudaFree devRayPool1 failed.");
+		checkCUDAError("cudaFree devRayPool1 failed.");
 		devRayPool1 = nullptr;
 	}
 	if (devRayPool2) {
 		cudaFree(devRayPool2);
-		checkCUDAError2("cudaFree devRayPool2 failed.");
+		checkCUDAError("cudaFree devRayPool2 failed.");
 		devRayPool2 = nullptr;
 	}
 	if (devTerminatedRays) {
 		cudaFree(devTerminatedRays);
-		checkCUDAError2("cudaFree v failed.");
+		checkCUDAError("cudaFree v failed.");
 		devTerminatedRays = nullptr;
 	}
 	if (devResults1) {
 		cudaFree(devResults1);
-		checkCUDAError2("cudaFree devResults1 failed.");
+		checkCUDAError("cudaFree devResults1 failed.");
 		devResults1 = nullptr;
 	}
 	if (devResults2) {
 		cudaFree(devResults2);
-		checkCUDAError2("cudaFree devResults2 failed.");
+		checkCUDAError("cudaFree devResults2 failed.");
 		devResults2 = nullptr;
 	}
 	if (devFrameBuf) {
 		cudaFree(devFrameBuf);
-		checkCUDAError2("cudaFree devFrameBuf failed.");
+		checkCUDAError("cudaFree devFrameBuf failed.");
 		devFrameBuf = nullptr;
 	}
 	if (devNormalBuf) {
 		cudaFree(devNormalBuf);
-		checkCUDAError2("cudaFree devNormalBuf failed.");
+		checkCUDAError("cudaFree devNormalBuf failed.");
 		devNormalBuf = nullptr;
 	}
 	if (devAlbedoBuf) {
 		cudaFree(devAlbedoBuf);
-		checkCUDAError2("cudaFree devAlbedoBuf failed.");
+		checkCUDAError("cudaFree devAlbedoBuf failed.");
 		devAlbedoBuf = nullptr;
 	}
 	if (devDepthBuf) {
 		cudaFree(devDepthBuf);
-		checkCUDAError2("cudaFree devDepthBuf failed.");
+		checkCUDAError("cudaFree devDepthBuf failed.");
 		devDepthBuf = nullptr;
 	}
 }
@@ -124,25 +124,29 @@ void PathTracer::iterate() {
 
 	std::chrono::steady_clock::time_point timer1, timer2;
 	timer1 = std::chrono::high_resolution_clock::now();
-	for (int spp = 0; spp < scene.config.spp; spp ++) {
+	for (int spp = 1; spp <= scene.config.spp; spp++) {
 		std::cout << "  Begin iteration " << spp << ". " << scene.config.spp - spp << " remaining." << std::endl;
 		if (printDetails) timer2 = std::chrono::high_resolution_clock::now();
 		dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
-		kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>>(window, spp, devRayPool1, scene.config.maxBounce, scene.cam, hasGbuffer);
+		kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>>(window, spp, devRayPool1, scene.config.maxBounce, scene.cam);
 		checkCUDAError("kernInitializeRays failed.");
-
+		bool firstIntersection = true;
 		int remainingRays = window.pixels;
 		while (true) {
 			remainingRays = intersectionTest(remainingRays);
+
+			//std::cout << remainingRays << " ";
 			if (remainingRays <= 0) break;
+
 			//sortRays(remainingRays);
 
-			if (!hasGbuffer) {
-				generateGbuffer(remainingRays);
-				hasGbuffer = true;
+			if (firstIntersection) {
+				generateGbuffer(remainingRays, spp);
+				firstIntersection = false;
 			}
 
 			remainingRays = shade(remainingRays, spp);
+			//std::cout << remainingRays << std::endl;
 			if (remainingRays <= 0) break;
 		}
 		writeFrameBuffer(spp);
@@ -164,16 +168,19 @@ __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStar
 	Ray r = rayPool[idx].ray;
 	glm::vec3 normal, position;
 	glm::vec3 pickedNormal{ 0.f, 0.f, 0.f };
+	glm::vec2 pickedUV{ 0.f, 0.f };
+	glm::vec2 uv;
 	int pickedMtlIdx{ -1 };
 	float dist;
 	float minDist{ FLT_MAX };
 	for (int i = trigIdxStart; i <= trigIdxEnd; i++) {
 		Triangle trig = trigBuf[i];
 		if (rayBoxIntersect(r, trig.bbox, &dist)) {
-			if (rayTrigIntersect(r, trig, &dist, &normal)) {
+			if (rayTrigIntersect(r, trig, &dist, &normal, &uv)) {
 				if (dist > 0.f && dist < minDist) {
 					minDist = dist;
 					pickedNormal = normal;
+					pickedUV = uv;
 					pickedMtlIdx = trig.mtlIdx;
 				}
 			}
@@ -182,18 +189,21 @@ __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStar
 	IntersectInfo result;
 	result.mtlIdx = pickedMtlIdx;
 	result.normal = pickedNormal;
+	result.uv = pickedUV;
 	result.position = r.origin + r.dir * (minDist - 0.001f);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
 	out[idx] = result;
 }
 
-__global__ void kernIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, Triangle* trigBuf, IntersectInfo* out) {
+__global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, Triangle* trigBuf, IntersectInfo* out) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
 	Ray r = rayPool[idx].ray;
 	glm::vec3 normal, position;
 	glm::vec3 pickedNormal{ 0.f, 0.f, 0.f };
+	glm::vec2 pickedUV{ 0.f, 0.f };
+	glm::vec2 uv;
 	int pickedMtlIdx{ -1 };
 	float dist;
 	float minDist{ FLT_MAX };
@@ -203,10 +213,11 @@ __global__ void kernIntersectTest(int rayNum, Path* rayPool, int objNum, Object*
 			for (int j = obj.trigIdxStart; j <= obj.trigIdxEnd; j++) {
 				Triangle trig = trigBuf[j];
 				if (rayBoxIntersect(r, trig.bbox, &dist)) {
-					if (rayTrigIntersect(r, trig, &dist, &normal)) {
+					if (rayTrigIntersect(r, trig, &dist, &normal, &uv)) {
 						if (dist > 0.f && dist < minDist) {
 							minDist = dist;
 							pickedNormal = normal;
+							pickedUV = uv;
 							pickedMtlIdx = trig.mtlIdx;
 						}
 					}
@@ -217,17 +228,81 @@ __global__ void kernIntersectTest(int rayNum, Path* rayPool, int objNum, Object*
 	IntersectInfo result;
 	result.mtlIdx = pickedMtlIdx;
 	result.normal = pickedNormal;
+	result.uv = pickedUV;
 	result.position = r.origin + r.dir * (minDist - 0.001f);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
 	out[idx] = result;
 
 }
 
+__global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, int rootIdx, BVH::Node* treeBuf, int* treeTrigIdx, Triangle* trigBuf, IntersectInfo* out) {
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (idx >= rayNum) return;
+
+	Ray r = rayPool[idx].ray;
+	glm::vec3 normal, position;
+	glm::vec3 pickedNormal{ 0.f, 0.f, 0.f };
+	glm::vec2 pickedUV{ 0.f, 0.f };
+	glm::vec2 uv;
+	int pickedMtlIdx{ -1 };
+	float dist;
+	float minDist{ FLT_MAX };
+
+	BVH::Node stack[MAX_TREE_DEPTH + 1];
+	int searchedChildern[MAX_TREE_DEPTH + 1] = { 0 };
+	int ptr = 0;
+	stack[0] = treeBuf[rootIdx]; // root node;
+	while (ptr >= 0) {
+		BVH::Node& node = stack[ptr];
+		if (node.trigIdxStart >= 0) { // leaf node
+			for (int i = node.trigIdxStart; i < node.trigIdxStart + node.size; i++) {
+				Triangle trig = trigBuf[treeTrigIdx[i]];
+				if (rayBoxIntersect(r, trig.bbox, &dist)) {
+					if (rayTrigIntersect(r, trig, &dist, &normal, &uv)) {
+						if (dist > 0.f && dist < minDist) {
+							minDist = dist;
+							pickedNormal = normal;
+							pickedUV = uv;
+							pickedMtlIdx = trig.mtlIdx;
+						}
+					}
+				}
+			}
+			searchedChildern[ptr] = 0;
+			ptr--;/*
+			pickedMtlIdx = node.idx;*/
+		}
+
+		else if (node.size > searchedChildern[ptr]) {
+			BVH::Node& child = treeBuf[node.children[searchedChildern[ptr]]];
+			searchedChildern[ptr]++;
+			if (rayBoxIntersect(r, child.bbox, &dist)) {
+				stack[ptr + 1] = child;
+				ptr++;
+				searchedChildern[ptr]=0;
+			}
+		}
+		else {
+			searchedChildern[ptr] = 0;
+			ptr--;
+		}
+	}
+
+	IntersectInfo result;
+	result.mtlIdx = pickedMtlIdx;
+	result.normal = pickedNormal;
+	result.uv = pickedUV;
+	result.position = r.origin + r.dir * (minDist - 0.001f);
+	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
+	out[idx] = result;
+}
+
 int PathTracer::intersectionTest(int rayNum) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	//kernTrigIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, 0, scene.trigBuf.size()-1, devTrigBuf, devResults1);
-	kernIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, devTrigBuf, devResults1);
-	checkCUDAError("kernTrigIntersectTest failed.");
+	//kernObjIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, devTrigBuf, devResults1);
+	kernBVHIntersectTest<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, bvh.rootIdx, bvh.devTree, bvh.devTreeTrigIdx, devTrigBuf, devResults1);
+	checkCUDAError("kernBVHIntersectTest failed.");
 
 	rayNum = compactRays(rayNum, devRayPool1, devRayPool2, devResults1, devResults2);
 
@@ -248,32 +323,59 @@ void PathTracer::sortRays(int rayNum) {
 	checkCUDAError("thrust::stable_sort failed.");
 }
 
-
 __global__ void kernGenerateGbuffer(
-	int rayNum, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
+	int rayNum, float currentSpp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
 	Path p = rayPool[idx];
 	int pixel = p.pixelIdx;
 	IntersectInfo intersect = intersections[idx];
-	//glm::vec3 normal = intersect.normal;
-	glm::vec3 albedo = mtlBuf[intersect.mtlIdx].albedo;
-	float depth = glm::length(intersect.position - p.ray.origin);
+	intersect.normal /= currentSpp;
 
-	normalBuf[pixel * 3] = intersect.normal.x;
-	normalBuf[pixel * 3 + 1] = intersect.normal.y;
-	normalBuf[pixel * 3 + 2] = intersect.normal.z;
-	albedoBuf[pixel * 3] = albedo.x;
-	albedoBuf[pixel * 3 + 1] = albedo.y;
-	albedoBuf[pixel * 3 + 2] = albedo.z;
-	depthBuf[pixel] = depth;
+	Material mtl = mtlBuf[intersect.mtlIdx];
+	glm::vec3 albedo;
+	if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+		float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersect.uv.x, intersect.uv.y);
+		albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
+	}
+	else albedo = mtl.albedo;
+	albedo /= currentSpp;
+
+	float depth = glm::length(intersect.position - p.ray.origin);
+	depth /= currentSpp;
+
+	// blend the gbuffer is good for denoising. 
+	// reference: https://github.com/tunabrain/tungsten/issues/69
+	normalBuf[pixel * 3]     *= (currentSpp - 1.f) / currentSpp;
+	normalBuf[pixel * 3 + 1] *= (currentSpp - 1.f) / currentSpp;
+	normalBuf[pixel * 3 + 2] *= (currentSpp - 1.f) / currentSpp;
+	normalBuf[pixel * 3]     += intersect.normal.x;
+	normalBuf[pixel * 3 + 1] += intersect.normal.y;
+	normalBuf[pixel * 3 + 2] += intersect.normal.z;
+	albedoBuf[pixel * 3]     *= (currentSpp - 1.f) / currentSpp;
+	albedoBuf[pixel * 3 + 1] *= (currentSpp - 1.f) / currentSpp;
+	albedoBuf[pixel * 3 + 2] *= (currentSpp - 1.f) / currentSpp;
+	albedoBuf[pixel * 3]     += albedo.x;
+	albedoBuf[pixel * 3 + 1] += albedo.y;
+	albedoBuf[pixel * 3 + 2] += albedo.z;
+	depthBuf[pixel] *= (currentSpp - 1.f) / currentSpp;
+	depthBuf[pixel] += depth;
+
+	//glm::vec3 albedo = { intersect.mtlIdx, intersect.mtlIdx, intersect.mtlIdx };
+	//albedo /= currentSpp;
+	//albedoBuf[pixel * 3]     *= (currentSpp - 1.f) / currentSpp;
+	//albedoBuf[pixel * 3 + 1] *= (currentSpp - 1.f) / currentSpp;
+	//albedoBuf[pixel * 3 + 2] *= (currentSpp - 1.f) / currentSpp;
+	//albedoBuf[pixel * 3]     += albedo.x;
+	//albedoBuf[pixel * 3 + 1] += albedo.y;
+	//albedoBuf[pixel * 3 + 2] += albedo.z;
+
 }
-void PathTracer::generateGbuffer(int rayNum) {
+void PathTracer::generateGbuffer(int rayNum, int spp) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernGenerateGbuffer<<<blocksPerGrid, BLOCK_SIZE>>>(
-		rayNum, devRayPool1, devResults1, devMtlBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
-	
+		rayNum, (float)spp, devRayPool1, devResults1, devMtlBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
 }
 
 
@@ -289,7 +391,7 @@ __global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* i
 	p.ray.origin = intersection.position;
 
 	if (mtl.type == MTL_TYPE_LIGHT_SOURCE) {
-		p.color = p.color * mtl.emission;
+		p.color = p.color * mtl.emittance;
 		p.remainingBounces = 0;
 	}
 	else {
@@ -299,8 +401,8 @@ __global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* i
 		else {
 			float pdf;
 			glm::vec3 wo = cosHemisphereSampler(intersection.normal, &pdf, makeSeededRandomEngine(spp, idx, 0));
-			glm::vec3 bsdf = opaqueBsdf(p.ray.dir, wo, intersection.normal, mtl);
-			p.color = (p.color * bsdf + mtl.emission) / pdf;
+			glm::vec3 bsdf = opaqueBsdf(p.ray.dir, wo, intersection.uv, intersection.normal, mtl);
+			p.color = (p.color * bsdf + mtl.emittance) / pdf;
 			//p.color = (wo + 1.f) / 2.f;
 			//p.color = (intersection.normal + 1.f) / 2.f;
 			p.ray.dir = wo;

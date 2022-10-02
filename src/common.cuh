@@ -23,8 +23,10 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <list>
 #include <unordered_map>
 #include <map>
+#include <algorithm>
 #include <limits>
 #include <exception>
 
@@ -40,6 +42,15 @@
 #define MTL_TYPE_TRANSPARENT 1
 #define MTL_TYPE_LIGHT_SOURCE 2
 
+#define DENOISER_TYPE_NONE 0
+#define DENOISER_TYPE_FILTER 1
+#define DENOISER_TYPE_OIDN 2
+
+#define TEXTURE_TYPE_BASE 0
+#define TEXTURE_TYPE_ROUGHNESS 1
+#define TEXTURE_TYPE_METALNESS 2
+#define TEXTURE_TYPE_NORMAL 3
+
 #define BLOCK_SIZE 128
 
 // CUDA 11.3 has added device code support for new C++ keywords: `constexpr` and `auto`.
@@ -54,6 +65,29 @@
 //constexpr float INV_HEIGHT = 1.f / WINDOW_HEIGHT;
 
 // help functions
+inline __device__ __host__ float fminf(float X, float Y, float Z) {
+	return fminf(X, fminf(Y, Z));
+}
+
+inline __device__ __host__ float fmaxf(float X, float Y, float Z) {
+	return fmaxf(X, fmaxf(Y, Z));
+}
+
+#ifndef hasItem(X, Y)
+#define hasItem(X, Y) (X.find(Y) != X.end())
+#endif
+
+namespace glm {
+template<int I, typename T, qualifier Q>
+inline __device__ __host__ glm::vec<I, T, Q> min(const glm::vec<I, T, Q>& v1, const glm::vec<I, T, Q>& v2, const glm::vec<I, T, Q>& v3) {
+	return glm::min(v1, glm::min(v2, v3));
+}
+template<int I, typename T, qualifier Q>
+inline __device__ __host__ glm::vec<I, T, Q> max(const glm::vec<I, T, Q>& v1, const glm::vec<I, T, Q>& v2, const glm::vec<I, T, Q>& v3) {
+	return glm::max(v1, glm::max(v2, v3));
+}
+}
+
 inline void checkCUDAError(const char* msg) {
 	cudaError_t err = cudaGetLastError();
 	if (cudaSuccess != err) {
@@ -106,11 +140,6 @@ std::string strLeftStrip(const std::string& str, const std::string& strip);
 
 std::string strRightStrip(const std::string& str, const std::string& strip);
 
-#ifndef hasItem(X, Y)
-#define hasItem(X, Y) (X.find(Y) != X.end())
-#endif
-
-
 // common data structures
 namespace nagi {
 
@@ -145,13 +174,28 @@ struct Camera {
 };
 
 struct BoundingBox { // AABB
-	glm::vec3 min;
-	glm::vec3 max;
+	glm::vec3 min{ FLT_MAX, FLT_MAX, FLT_MAX };
+	glm::vec3 max{ -FLT_MAX, -FLT_MAX, -FLT_MAX };
+	glm::vec3 center;
+	glm::vec3 halfExtent;
 };
+inline __device__ __host__ void updateBoundingBox(const glm::vec3& position, BoundingBox* box) {
+	box->min = glm::min(position, box->min);
+	box->max = glm::max(position, box->max);
+	box->halfExtent = (box->max - box->min) * 0.5f;
+	box->center = box->min + box->halfExtent;
+}
+inline __device__ __host__ void updateBoundingBox(const glm::vec3& min, const glm::vec3& max, BoundingBox* box) {
+	box->min = min;
+	box->max = max;
+	box->halfExtent = (box->max - box->min) * 0.5f;
+	box->center = box->min + box->halfExtent;
+}
 
 struct Vertex {
 	glm::vec3 position;
 	glm::vec3 normal;
+	glm::vec2 uv;
 };
 
 struct Triangle {
@@ -184,15 +228,33 @@ struct Object {
 	BoundingBox bbox;
 };
 
+struct Texture {
+	int width;
+	int height;
+	int channels;
+	cudaArray_t devArray;
+	cudaTextureObject_t devTexture;
+};
+
 struct Material {
 	int type;
-	glm::vec3 albedo;
-	glm::vec3 emission;
-	float transparent;
-	float roughness;
-	float metalness;
-	float ior;
+	unsigned int textures{ 0 };
+	glm::vec3 emittance{ 0.f };
+	glm::vec3 albedo{ 1.f };
+	Texture baseTex; // base texture = {albedo, transparency}
+	float roughness{ 1.f };
+	Texture roughnessTex;
+	float metalness{ 0.f };
+	Texture metalnessTex;
+	float transparency{ 1.f };
+	float ior{ 1.f };
 };
+inline __device__ __host__ bool hasTexture(const Material& mtl, unsigned int type) {
+	return (mtl.textures & (1 << type)) != 0;
+}
+inline __device__ __host__ void addTexture(Material& mtl, unsigned int type) {
+	mtl.textures = (mtl.textures | (1 << type));
+}
 
 struct WindowSize {
 	int width{ 1280 };

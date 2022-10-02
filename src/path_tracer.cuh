@@ -3,6 +3,7 @@
 
 #include "common.cuh"
 #include "intersection.cuh"
+#include "bvh.cuh"
 #include "sampler.cuh"
 #include "bsdf.cuh"
 
@@ -41,16 +42,20 @@ struct IntersectionComp {
 };
 
 __global__ void kernInitializeFrameBuffer(WindowSize window, float* frame);
-__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter);
-__global__ void kernIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, Triangle* trigBuf, IntersectInfo* out);
+__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter = true);
+// naive bvh
+__global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, Triangle* trigBuf, IntersectInfo* out);
+// brute force
 __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out);
+// oct tree bvh
+__global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, int rootIdx, BVH::Node* treeBuf, int* treeTrigBuf, Triangle* trigBuf, IntersectInfo* out);
 __global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* rayPool, float* frameBuffer);
-__global__ void kernGenerateGbuffer(int rayNum, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
+__global__ void kernGenerateGbuffer(int rayNum, float currentSpp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
 
 class PathTracer {
 public:
-	PathTracer(Scene& Scene) :scene{ Scene }, window{ Scene.config.window } {}
+	PathTracer(Scene& Scene, BVH& BVH) :scene{ Scene }, window{ Scene.config.window }, bvh{ BVH } {}
 	~PathTracer();
 	PathTracer(const PathTracer&) = delete;
 	void operator=(const PathTracer&) = delete;
@@ -66,7 +71,7 @@ public:
 	// compute color and generate new rays
 	int shade(int rayNum, int spp);
 
-	void generateGbuffer(int rayNum);
+	void generateGbuffer(int rayNum, int spp);
 
 	// delete rays whose flag is negetive
 	int compactRays(int rayNum, Path* rayPool, Path* compactedRayPool);
@@ -83,8 +88,8 @@ public:
 
 	bool printDetails{ false };
 	Scene& scene;
+	BVH& bvh;
 	WindowSize& window;
-	bool hasGbuffer{ false };
 
 	// ping-pong buffers
 	Path* devRayPool1{ nullptr };

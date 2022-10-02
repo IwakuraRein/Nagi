@@ -1,19 +1,13 @@
 {
     "graphics": {
-        "sample rate": 32,
+		"resolution": [1024, 1024],
+        "sample rate": 4,
         "max bounce": 64,
+		"denoiser": 2,
         "alpha": 1.0,
         "gamma": 1.0
     },
     "materials": {
-        "teapot": {
-            "type": "Opaque",
-            "albedo": [
-                0.4,
-                0.1,
-                0.1
-            ]
-        },
         "LeftWall": {
             "type": "Opaque",
             "albedo": [
@@ -32,11 +26,7 @@
         },
         "Floor": {
             "type": "Opaque",
-            "albedo": [
-                0.725,
-                0.71,
-                0.68
-            ]
+            "base texture": "WoodFloor.jpg"
         },
         "Ceiling": {
             "type": "Opaque",
@@ -48,6 +38,16 @@
         },
         "BackWall": {
             "type": "Opaque",
+            "base texture": "backwall.png"
+        },
+        "brass": {
+            "type": "Opaque",
+			"metalic": 1.0,
+			"roughness": 0.15,
+            "base texture": "Brass_Albedo.png"
+        },
+        "TallBox": {
+            "type": "Opaque",
             "albedo": [
                 0.725,
                 0.71,
@@ -56,7 +56,7 @@
         },
         "LightPanel": {
             "type": "Light Source",
-            "emission": [17,12,4]
+            "emittance": [17,12,4]
         }
     },
     "objects": {
@@ -148,20 +148,41 @@
             "mesh": "quad",
             "material": "LeftWall"
         },
-		"teapot":{
-            "rotation": [
+        "teapot": {
+            "position": [
+                0.328631,
                 0,
-                0,
-                0
+                0.374592
             ],
             "scale": [
                 0.6,
                 0.6,
                 0.6
             ],
+            "rotation": [
+                0,
+                0, 0
+            ],
             "mesh": "teapot",
-            "material": "teapot"
-		},
+            "material": "brass"
+        },
+        "TallBox": {
+            "position": [-0.335439,
+                0.6, -0.291415
+            ],
+            "scale": [
+                0.607289,
+                0.597739,
+                1.2
+            ],
+            "rotation": [
+                90,
+                180,
+                160.812
+            ],
+            "mesh": "cube",
+            "material": "TallBox"
+        },	 
         "LightPanel": {
             "position": [
                 0,

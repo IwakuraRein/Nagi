@@ -21,7 +21,7 @@
     <CudaCompile Include="src\common.cu">
       <Filter>Source</Filter>
     </CudaCompile>
-    <CudaCompile Include="src\user_interface.cu">
+    <CudaCompile Include="src\io.cu">
       <Filter>Source</Filter>
     </CudaCompile>
     <CudaCompile Include="src\bsdf.cu">
@@ -31,6 +31,9 @@
       <Filter>Source</Filter>
     </CudaCompile>
     <CudaCompile Include="src\denoiser.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\bvh.cu">
       <Filter>Source</Filter>
     </CudaCompile>
   </ItemGroup>
@@ -55,7 +58,7 @@
     <ClInclude Include="src\intersection.cuh">
       <Filter>Header</Filter>
     </ClInclude>
-    <ClInclude Include="src\user_interface.cuh">
+    <ClInclude Include="src\io.cuh">
       <Filter>Header</Filter>
     </ClInclude>
     <ClInclude Include="src\bsdf.cuh">
@@ -65,6 +68,9 @@
       <Filter>Header</Filter>
     </ClInclude>
     <ClInclude Include="src\denoiser.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bvh.cuh">
       <Filter>Header</Filter>
     </ClInclude>
   </ItemGroup>

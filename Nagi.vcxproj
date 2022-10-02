@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\bsdf.cu" />
+    <CudaCompile Include="src\bvh.cu" />
     <CudaCompile Include="src\denoiser.cu" />
     <CudaCompile Include="src\intersection.cu" />
     <CudaCompile Include="src\path_tracer.cu" />
@@ -24,19 +25,20 @@
     </CudaCompile>
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\instantiate.cpp" />
-    <CudaCompile Include="src\user_interface.cu">
+    <CudaCompile Include="src\io.cu">
       <FileType>Document</FileType>
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\bsdf.cuh" />
+    <ClInclude Include="src\bvh.cuh" />
     <ClInclude Include="src\common.cuh" />
     <ClInclude Include="src\denoiser.cuh" />
     <ClInclude Include="src\intersection.cuh" />
     <ClInclude Include="src\path_tracer.cuh" />
     <ClInclude Include="src\sampler.cuh" />
     <ClInclude Include="src\scene_loader.cuh" />
-    <ClInclude Include="src\user_interface.cuh" />
+    <ClInclude Include="src\io.cuh" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{7691890F-9819-4B3C-81CF-24402D6599C1}</ProjectGuid>

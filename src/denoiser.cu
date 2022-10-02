@@ -13,12 +13,12 @@ std::unique_ptr<float[]> Denoiser::denoise() {
 	timer = std::chrono::high_resolution_clock::now();
 
 	std::unique_ptr<float[]> denoised;
-	if (scene.config.denoiser == 1) 
+	if (scene.config.denoiser == DENOISER_TYPE_FILTER)
 		denoised = bilateralFilter(pathTracer.devFrameBuf, pathTracer.devAlbedoBuf, pathTracer.devNormalBuf, pathTracer.devDepthBuf);
-	else if (scene.config.denoiser == 2) 
+	else if (scene.config.denoiser == DENOISER_TYPE_OIDN)
 		denoised = openImageDenoiser(pathTracer.devFrameBuf, pathTracer.devAlbedoBuf, pathTracer.devNormalBuf);
 	else 
-		throw std::runtime_error("Error: Unknown denoiser type. Allowing types are: 1 (Bilateral Filtering); 2 (Open Image Denoise).");
+		throw std::runtime_error("Error: Unknown denoiser type.");
 
 	float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
 	std::cout << "  Done. Time cost: " << runningTime << " seconds." << std::endl;
@@ -28,7 +28,7 @@ std::unique_ptr<float[]> Denoiser::denoise() {
 Denoiser::~Denoiser() {
 	if (devDenoised) {
 		cudaFree(devDenoised);
-		checkCUDAError2("cudaFree devDenoised failed.");
+		checkCUDAError("cudaFree devDenoised failed.");
 	}
 }
 

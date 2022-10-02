@@ -1,4 +1,5 @@
 #include "scene_loader.cuh"
+#include "io.cuh"
 
 #include <tiny_obj_loader.h>
 
@@ -9,13 +10,45 @@ inline bool objComp(const Object& o1, const Object& o2) { return o1.mtlIdx < o2.
 inline void updateTrigBoundingBox(Triangle& trig) {
 	// use epsilon to avoid bounding box having 0 volume.
 	// FLT_EPSILON isn't enough. try using a larger number.
-	trig.bbox.min = glm::min(trig.vert0.position, glm::min(trig.vert1.position, trig.vert2.position)) - /*FLT_EPSILON*/ 0.0001f;
-	trig.bbox.max = glm::max(trig.vert0.position, glm::max(trig.vert1.position, trig.vert2.position)) + /*FLT_EPSILON*/ 0.0001f;
+	updateBoundingBox(glm::min(trig.vert0.position, trig.vert1.position, trig.vert2.position) - /*FLT_EPSILON*/ 0.0001f,
+		glm::max(trig.vert0.position, trig.vert1.position, trig.vert2.position) + /*FLT_EPSILON*/ 0.0001f,
+		&trig.bbox);
 }
 
-inline void updateBoundingBox(const Vertex& vert, BoundingBox& bbox) {
-	bbox.min = glm::min(vert.position, bbox.min);
-	bbox.max = glm::max(vert.position, bbox.max);
+nagi::SceneLoader::~SceneLoader() {
+	// destroy all textures
+	for (auto& mtl : scene.mtlBuf) {
+		if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.baseTex.devArray) == destroyedArrays.end()) {
+				cudaFreeArray(mtl.baseTex.devArray);
+				destroyedArrays.push_back(mtl.baseTex.devArray);
+			}
+			if (find(destroyedTextures.begin(), destroyedTextures.end(), mtl.baseTex.devTexture) == destroyedTextures.end()) {
+				cudaDestroyTextureObject(mtl.baseTex.devTexture);
+				destroyedTextures.push_back(mtl.baseTex.devTexture);
+			}
+		}
+		if (hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS)) {
+			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.roughnessTex.devArray) == destroyedArrays.end()) {
+				cudaFreeArray(mtl.roughnessTex.devArray);
+				destroyedArrays.push_back(mtl.roughnessTex.devArray);
+			}
+			if (find(destroyedTextures.begin(), destroyedTextures.end(), mtl.roughnessTex.devTexture) == destroyedTextures.end()) {
+				cudaDestroyTextureObject(mtl.roughnessTex.devTexture);
+				destroyedTextures.push_back(mtl.roughnessTex.devTexture);
+			}
+		}
+		if (hasTexture(mtl, TEXTURE_TYPE_METALNESS)) {
+			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.metalnessTex.devArray) == destroyedArrays.end()) {
+				cudaFreeArray(mtl.metalnessTex.devArray);
+				destroyedArrays.push_back(mtl.metalnessTex.devArray);
+			}
+			if (find(destroyedTextures.begin(), destroyedTextures.end(), mtl.metalnessTex.devTexture) == destroyedTextures.end()) {
+				cudaDestroyTextureObject(mtl.metalnessTex.devTexture);
+				destroyedTextures.push_back(mtl.metalnessTex.devTexture);
+			}
+		}
+	}
 }
 
 nlohmann::json SceneLoader::readJson(const std::string& filePath) {
@@ -38,8 +71,7 @@ void SceneLoader::load() {
 	}
 	jFile = readJson(filePath);
 
-	scene.bbox.min = glm::vec3{ FLT_MAX };
-	scene.bbox.max = glm::vec3{ -FLT_MAX };
+	scene.bbox = BoundingBox{};
 
 	loadConfig();
 	loadCameras();
@@ -81,7 +113,7 @@ void SceneLoader::loadMaterials() {
 	for (auto& material : jFile["materials"].items()) {
 		if (printDetails) std::cout << "  Loading material " << material.key() << "...";
 		auto& items = material.value();
-		Material mtl;
+		Material mtl{};
 		{
 			if (hasItem(items, "type")) {
 				std::string type = items["type"];
@@ -97,38 +129,89 @@ void SceneLoader::loadMaterials() {
 				else throw std::runtime_error("Error: Unknown material type.");
 			}
 			else throw std::runtime_error("Error: Material must specify its type.");
-			if (hasItem(items, "albedo")) {
-				auto& albedo = items["albedo"];
-				mtl.albedo = glm::vec3{ albedo[0], albedo[1], albedo[2] };
+
+			if (hasItem(items, "base texture")) {
+				std::string texName(items["base texture"]);
+				texName = "base" + texName; // encoding texture's path with its type
+				if (!hasItem(textures, texName)) {
+					std::string texPath = items["base texture"];
+					if (doesFileExist(texPath)); // do nothing
+					else {
+						std::string dir = strRightStrip(filePath, getFileName(filePath));
+						if (doesFileExist(dir + texPath)) texPath = dir + texPath;
+						else if (doesFileExist(dir + "textures/" + texPath)) texPath = dir + "textures/" + texPath;
+						else throw std::runtime_error("Error: Base texture file doesn't exist.");
+					}
+					textures.emplace(texName, loadTexture(texPath, 4));
+				}
+				mtl.baseTex = textures[texName];
+				addTexture(mtl, TEXTURE_TYPE_BASE);
 			}
-			else
-				mtl.albedo = glm::vec3{ 1.f, 1.f, 1.f };
-			if (hasItem(items, "roughness")) {
-				mtl.roughness = items["roughness"];
+			else {
+				if (hasItem(items, "albedo")) {
+					auto& albedo = items["albedo"];
+					mtl.albedo = glm::vec3{ albedo[0], albedo[1], albedo[2] };
+				}
+				if (hasItem(items, "transparency")) {
+					mtl.transparency = items["transparency"];
+				}
 			}
-			else
-				mtl.roughness = 1.f;
-			if (hasItem(items, "metalness")) {
-				mtl.metalness = items["metalness"];
+
+			if (hasItem(items, "roughness texture")) {
+				std::string texName(items["base texture"]);
+				texName = "roughness" + texName; // encoding texture's path with its type
+				if (!hasItem(textures, texName)) {
+					std::string texPath = items["roughness texture"];
+					if (doesFileExist(texPath)); // do nothing
+					else {
+						std::string dir = strRightStrip(filePath, getFileName(filePath));
+						if (doesFileExist(dir + texPath)) texPath = dir + texPath;
+						else if (doesFileExist(dir + "textures/" + texPath)) texPath = dir + "textures/" + texPath;
+						else throw std::runtime_error("Error: Roughness texture file doesn't exist.");
+					}
+					textures.emplace(texName, loadTexture(texPath, 1));
+				}
+
+				mtl.roughnessTex = textures[texName];
+				addTexture(mtl, TEXTURE_TYPE_ROUGHNESS);
 			}
-			else
-				mtl.metalness = 0.f;
-			if (hasItem(items, "transparent")) {
-				mtl.transparent = items["transparent"];
+			else {
+				if (hasItem(items, "roughness")) {
+					mtl.roughness = items["roughness"];
+				}
 			}
-			else
-				mtl.transparent = 0.f;
+
+			if (hasItem(items, "metalness texture")) {
+				std::string texName(items["base texture"]);
+				texName = "roughness" + texName; // encoding texture's path with its type
+				if (!hasItem(textures, texName)) {
+					std::string texPath = items["metalness texture"];
+					if (doesFileExist(texPath)); // do nothing
+					else {
+						std::string dir = strRightStrip(filePath, getFileName(filePath));
+						if (doesFileExist(dir + texPath)) texPath = dir + texPath;
+						else if (doesFileExist(dir + "textures/" + texPath)) texPath = dir + "textures/" + texPath;
+						else throw std::runtime_error("Error: Metalness texture file doesn't exist.");
+					}
+					textures.emplace(texName, loadTexture(texPath, 1));
+				}
+
+				mtl.metalnessTex = textures[texName];
+				addTexture(mtl, TEXTURE_TYPE_METALNESS);
+			}
+			else {
+				if (hasItem(items, "metalness")) {
+					mtl.metalness = items["metalness"];
+				}
+			}
+
 			if (hasItem(items, "ior")) {
 				mtl.ior = items["ior"];
 			}
-			else
-				mtl.ior = 1.f;
-			if (hasItem(items, "emission")) {
-				auto& emission = items["emission"];
-				mtl.emission = glm::vec3{ emission[0], emission[1], emission[2] };
+			if (hasItem(items, "emittance")) {
+				auto& emittance = items["emittance"];
+				mtl.emittance = glm::vec3{ emittance[0], emittance[1], emittance[2] };
 			}
-			else
-				mtl.emission = glm::vec3{ 0.f };
 		}
 		scene.mtlBuf[idx] = std::move(mtl);
 		mtlIndices.emplace(material.key(), idx);
@@ -202,6 +285,9 @@ void SceneLoader::loadObjects() {
 		scene.objBuf[idx++] = std::move(obj);
 		if (printDetails) std::cout << " done." << std::endl;
 	}
+
+	scene.bbox.min -= /*FLT_EPSILON*/0.01f;
+	scene.bbox.max += /*FLT_EPSILON*/0.01f;
 
 	// sort objects according to their materials
 	std::sort(scene.objBuf.begin(), scene.objBuf.end(), objComp);
@@ -290,10 +376,13 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj) {
 				const auto& vertInfo2 = shape.mesh.indices[i * 3 + 2];
 				if (vertInfo0.vertex_index < 0 ||
 					vertInfo0.normal_index < 0 ||
+					vertInfo0.texcoord_index < 0 ||
 					vertInfo1.vertex_index < 0 ||
 					vertInfo1.normal_index < 0 ||
+					vertInfo1.texcoord_index < 0 ||
+					vertInfo2.vertex_index < 0 ||
 					vertInfo2.normal_index < 0 ||
-					vertInfo2.normal_index < 0)
+					vertInfo2.texcoord_index < 0)
 					throw std::runtime_error("Error: Inadequate vertex information.");
 				trig.vert0.position = {
 						attrib.vertices[3 * vertInfo0.vertex_index + 0],
@@ -305,6 +394,10 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj) {
 						attrib.normals[3 * vertInfo0.normal_index + 1],
 						attrib.normals[3 * vertInfo0.normal_index + 2],
 				};
+				trig.vert0.uv = {
+						attrib.texcoords[2 * vertInfo0.texcoord_index + 0],
+						attrib.texcoords[2 * vertInfo0.texcoord_index + 1]
+				};
 				trig.vert1.position = {
 						attrib.vertices[3 * vertInfo1.vertex_index + 0],
 						attrib.vertices[3 * vertInfo1.vertex_index + 1],
@@ -314,6 +407,10 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj) {
 						attrib.normals[3 * vertInfo1.normal_index + 0],
 						attrib.normals[3 * vertInfo1.normal_index + 1],
 						attrib.normals[3 * vertInfo1.normal_index + 2],
+				};
+				trig.vert1.uv = {
+						attrib.texcoords[2 * vertInfo1.texcoord_index + 0],
+						attrib.texcoords[2 * vertInfo1.texcoord_index + 1]
 				};
 				trig.vert2.position = {
 						attrib.vertices[3 * vertInfo2.vertex_index + 0],
@@ -325,6 +422,10 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj) {
 						attrib.normals[3 * vertInfo2.normal_index + 1],
 						attrib.normals[3 * vertInfo2.normal_index + 2],
 				};
+				trig.vert2.uv = {
+						attrib.texcoords[2 * vertInfo2.texcoord_index + 0],
+						attrib.texcoords[2 * vertInfo2.texcoord_index + 1]
+				};
 			}
 
 			scene.trigBuf[trigIdx++] = std::move(trig);
@@ -333,8 +434,7 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj) {
 
 	meshTrigIdx.y = scene.trigBuf.size() - 1;
 
-	obj.bbox.min = glm::vec3{ FLT_MAX };
-	obj.bbox.max = glm::vec3{ -FLT_MAX };
+	obj.bbox = BoundingBox{};
 	// move everything to world space and update bounding boxes
 	for (int i = meshTrigIdx.x; i <= meshTrigIdx.y; i++) {
 		Triangle& trig = scene.trigBuf[i];
@@ -350,15 +450,72 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj) {
 
 		updateTrigBoundingBox(trig);
 
-		updateBoundingBox(trig.vert0, scene.bbox);
-		updateBoundingBox(trig.vert1, scene.bbox);
-		updateBoundingBox(trig.vert2, scene.bbox);
-		updateBoundingBox(trig.vert0, obj.bbox);
-		updateBoundingBox(trig.vert1, obj.bbox);
-		updateBoundingBox(trig.vert2, obj.bbox);
+		updateBoundingBox(trig.vert0.position, &scene.bbox);
+		updateBoundingBox(trig.vert1.position, &scene.bbox);
+		updateBoundingBox(trig.vert2.position, &scene.bbox);
+		updateBoundingBox(trig.vert0.position, &obj.bbox);
+		updateBoundingBox(trig.vert1.position, &obj.bbox);
+		updateBoundingBox(trig.vert2.position, &obj.bbox);
 	}
-
+	obj.bbox.min -= 0.01f;
+	obj.bbox.max += 0.01f;
 	return meshTrigIdx;
+}
+
+// reference: https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#texture-and-surface-memory
+//            https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TEXTURE__OBJECT.html
+Texture SceneLoader::loadTexture(const std::string& texPath, int ch, bool srgb) {
+	if (!doesFileExist(texPath)) {
+		throw std::runtime_error("Error: Image file doesn't exist.");
+	}
+	Texture tex;
+	int chInFile;
+
+	// use float buffer no matter it's ldr or hdr
+	std::unique_ptr<float[]> buffer{ stbi_loadf(texPath.c_str(), &tex.width, &tex.height, &chInFile, ch) };
+	if (buffer == nullptr) {
+		throw std::runtime_error("Error: Can not load image file");
+	}
+	tex.channels = ch;
+	//if (ch != chInFile) {
+	//	std::cerr << "  Warning: Image file " << texPath << " has " << chInFile << " channels but the application requires a " << ch << "-channel image." << std::endl;
+	//}
+	cudaChannelFormatDesc channelDesc;
+	
+	switch (ch) {
+	case 1:
+		channelDesc = cudaCreateChannelDesc<float1>();
+		break;
+	case 4:
+		channelDesc = cudaCreateChannelDesc<float4>();
+		break;
+	default:
+		throw std::runtime_error("Error: Unsupported image channels.");
+		break;
+	}
+	cudaMallocArray(&tex.devArray, &channelDesc, tex.width, tex.height);
+	cudaMemcpyToArray(tex.devArray, 0, 0, buffer.get(), tex.width * tex.height * tex.channels * sizeof(float), cudaMemcpyHostToDevice);
+
+	// Specify texture
+	struct cudaResourceDesc resDesc;
+	memset(&resDesc, 0, sizeof(resDesc));
+	resDesc.resType = cudaResourceTypeArray;
+	resDesc.res.array.array = tex.devArray;
+
+	// Specify texture object parameters
+	struct cudaTextureDesc texDesc;
+	memset(&texDesc, 0, sizeof(texDesc));
+	texDesc.addressMode[0] = cudaAddressModeWrap;
+	texDesc.addressMode[1] = cudaAddressModeWrap;
+	texDesc.filterMode = cudaFilterModeLinear;
+	texDesc.readMode = cudaReadModeElementType;
+	texDesc.sRGB = srgb ? 1 : -1;
+	texDesc.normalizedCoords = 1;
+
+	// Create texture object
+	cudaCreateTextureObject(&tex.devTexture, &resDesc, &texDesc, NULL);
+
+	return tex;
 }
 
 }

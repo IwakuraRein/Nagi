@@ -87,8 +87,36 @@ __device__ __host__ glm::mat4 getTransformMat(const glm::vec3& position, const g
 	return mat;
 }
 
-// rotation about euler angles. yxz
 __device__ __host__ glm::mat4 getRotationMat(const glm::vec3& rotation) {
+	//const float c3 = glm::cos(glm::radians(rotation.z));
+	//const float s3 = glm::sin(glm::radians(rotation.z));
+	//const float c2 = glm::cos(glm::radians(rotation.x));
+	//const float s2 = glm::sin(glm::radians(rotation.x));
+	//const float c1 = glm::cos(glm::radians(rotation.y));
+	//const float s1 = glm::sin(glm::radians(rotation.y));
+
+	//return glm::mat4{
+	//	{
+	//		(c1 * c3 + s1 * s2 * s3),
+	//		(c2 * s3),
+	//		(c1 * s2 * s3 - c3 * s1),
+	//		0.f
+	//	},
+	//	{
+	//		(c3 * s1 * s2 - c1 * s3),
+	//		(c2 * c3),
+	//		(c1 * c3 * s2 + s1 * s3),
+	//		0.f
+	//	},
+	//	{
+	//		(c2 * s1),
+	//		(-s2),
+	//		(c1 * c2),
+	//		0.f
+	//	},
+	//	{ 0.f, 0.f, 0.f, 1.f }
+	//};
+
 	return glm::yawPitchRoll(rotation.y, rotation.x, rotation.z);
 }
 

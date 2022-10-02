@@ -269,9 +269,9 @@ struct material_t {
 
   std::array<double, 3> GetEmission() {
     std::array<double, 3> values;
-    values[0] = double(emission[0]);
-    values[1] = double(emission[1]);
-    values[2] = double(emission[2]);
+    values[0] = double(emittance[0]);
+    values[1] = double(emittance[1]);
+    values[2] = double(emittance[2]);
 
     return values;
   }
@@ -2055,7 +2055,7 @@ void LoadMtl(std::map<std::string, int> *material_map,
       continue;
     }
 
-    // emission
+    // emittance
     if (token[0] == 'K' && token[1] == 'e' && IS_SPACE(token[2])) {
       token += 2;
       real_t r, g, b;

@@ -1,7 +1,7 @@
 {
     "graphics": {
 		"resolution": [1024, 1024],
-        "sample rate": 32,
+        "sample rate": 1,
         "max bounce": 64,
 		"denoiser": 2,
         "alpha": 1.0,
@@ -26,11 +26,7 @@
         },
         "Floor": {
             "type": "Opaque",
-            "albedo": [
-                0.725,
-                0.71,
-                0.68
-            ]
+            "base texture": "WoodFloor.jpg"
         },
         "Ceiling": {
             "type": "Opaque",
@@ -42,11 +38,7 @@
         },
         "BackWall": {
             "type": "Opaque",
-            "albedo": [
-                0.725,
-                0.71,
-                0.68
-            ]
+            "base texture": "backwall.png"
         },
         "ShortBox": {
             "type": "Opaque",
@@ -66,7 +58,7 @@
         },
         "LightPanel": {
             "type": "Light Source",
-            "emission": [17,12,4]
+            "emittance": [17,12,4]
         }
     },
     "objects": {
