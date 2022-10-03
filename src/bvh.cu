@@ -46,7 +46,7 @@ void BVH::build() {
 	checkCUDAError("cudaMemcpy devTree failed.");
 
 	float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
-	std::cout << "Done. Tirangles in BVH: " << tree.size() << ". Time cost : " << runningTime << " seconds." << std::endl;
+	std::cout << "Done. Tirangles: " << trigIndices->size() << ". Nodes: " << tree.size() << ". Time cost : " << runningTime << " seconds." << std::endl;
 }
 
 int BVH::buildNode(

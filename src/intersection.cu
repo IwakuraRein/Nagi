@@ -37,15 +37,12 @@ __device__ __host__ bool rayTrigIntersect(
 	if (glm::intersectRayTriangle(
 		r.origin, r.dir, triangle.vert0.position, triangle.vert1.position, triangle.vert2.position, baryCoord, *dist)) {
 		*normal = baryCoord.x * triangle.vert0.normal + baryCoord.y * triangle.vert1.normal + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.normal;
-		if (glm::dot(*normal, r.dir) < 0) { // angle > 90
-			// uv needs another interpolation order. don't know why
-			//*uv = baryCoord.x * triangle.vert0.uv + baryCoord.y * triangle.vert1.uv + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.uv;
-			*uv = (1 - baryCoord.x - baryCoord.y) * triangle.vert0.uv + baryCoord.x * triangle.vert1.uv + baryCoord.y * triangle.vert2.uv;
-			return true;
-		}
-		else return false;
+		// uv needs another interpolation order. don't know why
+		//*uv = baryCoord.x * triangle.vert0.uv + baryCoord.y * triangle.vert1.uv + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.uv;
+		*uv = (1 - baryCoord.x - baryCoord.y) * triangle.vert0.uv + baryCoord.x * triangle.vert1.uv + baryCoord.y * triangle.vert2.uv;
+		return true;
 	}
-	else return false;
+	return false;
 }
 
 __device__ __host__ bool boxBoxIntersect(const BoundingBox& a, const BoundingBox& b/*, BoundingBox* overlap*/) {

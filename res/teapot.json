@@ -1,7 +1,7 @@
 {
     "graphics": {
 		"resolution": [1024, 1024],
-        "sample rate": 1,
+        "sample rate": 16,
         "max bounce": 64,
 		"denoiser": 2,
         "alpha": 1.0,
@@ -44,15 +44,15 @@
             "type": "Opaque",
 			"metalic": 1.0,
 			"roughness": 0.15,
-            "base texture": "Brass_Albedo.png"
+			"base texture": "Brass_Albedo.png"
         },
-        "TallBox": {
-            "type": "Opaque",
+        "glass": {
+            "type": "Transparent",
             "albedo": [
-                0.725,
-                0.71,
-                0.68
-            ]
+                1,1,1
+            ],
+			"roughness": 0,
+			"ior":1.5
         },
         "LightPanel": {
             "type": "Light Source",
@@ -148,6 +148,24 @@
             "mesh": "quad",
             "material": "LeftWall"
         },
+		"vase": {
+            "position": [
+			-0.5,
+               0, 0.374592
+            ],
+            "scale": [
+                2,
+                2,
+                2
+            ],
+            "rotation": [
+                180,
+                0,
+                0
+            ],
+            "mesh": "smooth_vase",
+            "material": "brass"
+        },	 
         "teapot": {
             "position": [
                 0.328631,
@@ -166,23 +184,6 @@
             "mesh": "teapot",
             "material": "brass"
         },
-        "TallBox": {
-            "position": [-0.335439,
-                0.6, -0.291415
-            ],
-            "scale": [
-                0.607289,
-                0.597739,
-                1.2
-            ],
-            "rotation": [
-                90,
-                180,
-                160.812
-            ],
-            "mesh": "cube",
-            "material": "TallBox"
-        },	 
         "LightPanel": {
             "position": [
                 0,

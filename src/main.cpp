@@ -37,8 +37,8 @@ int main(int argc, char* argv[]) {
 			denoiser.reset(nullptr);
 		}
 
-		auto albedo = pathTracer->getAlbedoBuffer();
-		saveHDR(scene.config.window, albedo.get(), 3, "./albedo_");
+		//auto albedo = pathTracer->getAlbedoBuffer();
+		//saveHDR(scene.config.window, albedo.get(), 3, "./albedo_");
 
 		pathTracer.reset(nullptr);
 		bvh.reset(nullptr);

@@ -50,6 +50,7 @@
 #define TEXTURE_TYPE_ROUGHNESS 1
 #define TEXTURE_TYPE_METALNESS 2
 #define TEXTURE_TYPE_NORMAL 3
+#define TEXTURE_TYPE_OCCLUSION 4
 
 #define BLOCK_SIZE 128
 
@@ -86,6 +87,10 @@ template<int I, typename T, qualifier Q>
 inline __device__ __host__ glm::vec<I, T, Q> max(const glm::vec<I, T, Q>& v1, const glm::vec<I, T, Q>& v2, const glm::vec<I, T, Q>& v3) {
 	return glm::max(v1, glm::max(v2, v3));
 }
+}
+
+inline __device__ __host__ glm::vec3 halfway(const glm::vec3& v, const glm::vec3& l) {
+	return glm::normalize(v+l);
 }
 
 inline void checkCUDAError(const char* msg) {
@@ -239,15 +244,16 @@ struct Texture {
 struct Material {
 	int type;
 	unsigned int textures{ 0 };
-	glm::vec3 emittance{ 0.f };
-	glm::vec3 albedo{ 1.f };
-	Texture baseTex; // base texture = {albedo, transparency}
+	//glm::vec3 emittance{ 0.f };
+	glm::vec3 albedo{ 1.f }; // if light source, store emittance into albedo
+	Texture baseTex;
 	float roughness{ 1.f };
 	Texture roughnessTex;
-	float metalness{ 0.f };
-	Texture metalnessTex;
-	float transparency{ 1.f };
-	float ior{ 1.f };
+	float metallic{ 0.f };
+	Texture metallicTex;
+	Texture normalTex;
+	Texture occlusionTex;
+	//float ior;
 };
 inline __device__ __host__ bool hasTexture(const Material& mtl, unsigned int type) {
 	return (mtl.textures & (1 << type)) != 0;

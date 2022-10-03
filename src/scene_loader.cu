@@ -39,13 +39,13 @@ nagi::SceneLoader::~SceneLoader() {
 			}
 		}
 		if (hasTexture(mtl, TEXTURE_TYPE_METALNESS)) {
-			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.metalnessTex.devArray) == destroyedArrays.end()) {
-				cudaFreeArray(mtl.metalnessTex.devArray);
-				destroyedArrays.push_back(mtl.metalnessTex.devArray);
+			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.metallicTex.devArray) == destroyedArrays.end()) {
+				cudaFreeArray(mtl.metallicTex.devArray);
+				destroyedArrays.push_back(mtl.metallicTex.devArray);
 			}
-			if (find(destroyedTextures.begin(), destroyedTextures.end(), mtl.metalnessTex.devTexture) == destroyedTextures.end()) {
-				cudaDestroyTextureObject(mtl.metalnessTex.devTexture);
-				destroyedTextures.push_back(mtl.metalnessTex.devTexture);
+			if (find(destroyedTextures.begin(), destroyedTextures.end(), mtl.metallicTex.devTexture) == destroyedTextures.end()) {
+				cudaDestroyTextureObject(mtl.metallicTex.devTexture);
+				destroyedTextures.push_back(mtl.metallicTex.devTexture);
 			}
 		}
 	}
@@ -62,7 +62,7 @@ nlohmann::json SceneLoader::readJson(const std::string& filePath) {
 }
 
 void SceneLoader::load() {
-	std::cout << "Loading scene " << filePath << "..." << std::endl;
+	std::cout << "Loading scene " << filePath << "...";
 	if (!doesFileExist(filePath)) {
 		std::string msg{ "Error: File " };
 		msg += filePath;
@@ -78,7 +78,7 @@ void SceneLoader::load() {
 	loadMaterials();
 	loadObjects();
 
-	std::cout << "Loading scene finished. Triangle count: " << scene.trigBuf.size() << std::endl;
+	std::cout << " Done. Triangle count: " << scene.trigBuf.size() << std::endl;
 }
 
 void SceneLoader::loadConfig() {
@@ -130,7 +130,12 @@ void SceneLoader::loadMaterials() {
 			}
 			else throw std::runtime_error("Error: Material must specify its type.");
 
-			if (hasItem(items, "base texture")) {
+			if (hasItem(items, "emittance")) {
+				auto& emittance = items["emittance"];
+				mtl.albedo = glm::vec3{ emittance[0], emittance[1], emittance[2] };
+			}
+
+			else if (hasItem(items, "base texture")) {
 				std::string texName(items["base texture"]);
 				texName = "base" + texName; // encoding texture's path with its type
 				if (!hasItem(textures, texName)) {
@@ -142,7 +147,9 @@ void SceneLoader::loadMaterials() {
 						else if (doesFileExist(dir + "textures/" + texPath)) texPath = dir + "textures/" + texPath;
 						else throw std::runtime_error("Error: Base texture file doesn't exist.");
 					}
+					stbi_ldr_to_hdr_gamma(2.2f); // enable gamma correction for albedo
 					textures.emplace(texName, loadTexture(texPath, 4));
+					stbi_ldr_to_hdr_gamma(1.f);
 				}
 				mtl.baseTex = textures[texName];
 				addTexture(mtl, TEXTURE_TYPE_BASE);
@@ -151,9 +158,6 @@ void SceneLoader::loadMaterials() {
 				if (hasItem(items, "albedo")) {
 					auto& albedo = items["albedo"];
 					mtl.albedo = glm::vec3{ albedo[0], albedo[1], albedo[2] };
-				}
-				if (hasItem(items, "transparency")) {
-					mtl.transparency = items["transparency"];
 				}
 			}
 
@@ -181,11 +185,11 @@ void SceneLoader::loadMaterials() {
 				}
 			}
 
-			if (hasItem(items, "metalness texture")) {
+			if (hasItem(items, "metallic texture")) {
 				std::string texName(items["base texture"]);
 				texName = "roughness" + texName; // encoding texture's path with its type
 				if (!hasItem(textures, texName)) {
-					std::string texPath = items["metalness texture"];
+					std::string texPath = items["metallic texture"];
 					if (doesFileExist(texPath)); // do nothing
 					else {
 						std::string dir = strRightStrip(filePath, getFileName(filePath));
@@ -196,22 +200,23 @@ void SceneLoader::loadMaterials() {
 					textures.emplace(texName, loadTexture(texPath, 1));
 				}
 
-				mtl.metalnessTex = textures[texName];
+				mtl.metallicTex = textures[texName];
 				addTexture(mtl, TEXTURE_TYPE_METALNESS);
 			}
 			else {
-				if (hasItem(items, "metalness")) {
-					mtl.metalness = items["metalness"];
+				if (hasItem(items, "metallic")) {
+					mtl.metallic = items["metallic"];
 				}
 			}
 
-			if (hasItem(items, "ior")) {
-				mtl.ior = items["ior"];
-			}
-			if (hasItem(items, "emittance")) {
-				auto& emittance = items["emittance"];
-				mtl.emittance = glm::vec3{ emittance[0], emittance[1], emittance[2] };
-			}
+			//if (hasItem(items, "fresnel")) {
+			//	auto& f = items["fresnel"];
+			//	mtl.fresnel = glm::vec3{ f[0], f[1], f[2] };
+			//}
+			//if (hasItem(items, "ior")) {
+			//	float ior = items["ior"];
+			//	mtl.fresnel = glm::vec3{ (1.f - ior) / ((1.f + ior) * (1.f + ior)) };
+			//}
 		}
 		scene.mtlBuf[idx] = std::move(mtl);
 		mtlIndices.emplace(material.key(), idx);

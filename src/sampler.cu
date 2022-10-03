@@ -27,6 +27,29 @@ __device__ __host__ glm::vec3 getDifferentDir(const glm::vec3& dir) {
     return T;
 }
 
+// reference: https://agraphicsguy.wordpress.com/2015/11/01/sampling-microfacet-brdf/
+__device__ __host__ glm::vec3 nagi::GGXImportanceSampler(float alpha, const glm::vec3& wi, const glm::vec3& normal, float* pdf, thrust::default_random_engine& rng) {
+    thrust::uniform_real_distribution<float> u01(0, 1);
+    float rnd1 = u01(rng);
+    float rnd2 = u01(rng);
+
+    float a2 = alpha * alpha;
+    float phi = rnd1 * TWO_PI;
+    float cosTheta = sqrtf((1 - rnd2) / (rnd2 * (a2 - 1) + 1));
+    float cosTheta2 = cosTheta * cosTheta;
+    float sinTheta = sqrtf(1 - cosTheta2);
+
+    float denom = ((a2 - 1) * cosTheta2 + 1);
+    *pdf = (a2 * cosTheta * sinTheta) * INV_PI / (denom * denom + FLT_EPSILON);
+
+    glm::vec3 T = getDifferentDir(normal);
+    T = glm::normalize(glm::cross(T, normal));
+    glm::vec3 B = glm::normalize(glm::cross(T, normal));
+
+    glm::vec3 h{ T * cosf(phi) * sinTheta + B * sinf(phi) * sinTheta + normal * cosTheta };
+    return glm::normalize(glm::reflect(wi, h));
+}
+
 __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& normal, float* pdf, thrust::default_random_engine& rng) {
     thrust::uniform_real_distribution<float> u01(0, 1);
 
@@ -54,7 +77,7 @@ __device__ __host__ glm::vec3 uniformHemisphereSampler(const glm::vec3& normal, 
     float rnd2 = u01(rng);
 
     float phi = rnd1 * TWO_PI;
-    float r = sqrt(1.0f - rnd2 * rnd2);
+    float r = sqrtf(1.0f - rnd2 * rnd2);
 
     glm::vec3 wo_tan{ cosf(phi) * r, sinf(phi) * r, rnd2 };
 

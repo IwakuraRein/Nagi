@@ -361,16 +361,6 @@ __global__ void kernGenerateGbuffer(
 	albedoBuf[pixel * 3 + 2] += albedo.z;
 	depthBuf[pixel] *= (currentSpp - 1.f) / currentSpp;
 	depthBuf[pixel] += depth;
-
-	//glm::vec3 albedo = { intersect.mtlIdx, intersect.mtlIdx, intersect.mtlIdx };
-	//albedo /= currentSpp;
-	//albedoBuf[pixel * 3]     *= (currentSpp - 1.f) / currentSpp;
-	//albedoBuf[pixel * 3 + 1] *= (currentSpp - 1.f) / currentSpp;
-	//albedoBuf[pixel * 3 + 2] *= (currentSpp - 1.f) / currentSpp;
-	//albedoBuf[pixel * 3]     += albedo.x;
-	//albedoBuf[pixel * 3 + 1] += albedo.y;
-	//albedoBuf[pixel * 3 + 2] += albedo.z;
-
 }
 void PathTracer::generateGbuffer(int rayNum, int spp) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
@@ -390,23 +380,44 @@ __global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* i
 
 	p.ray.origin = intersection.position;
 
-	if (mtl.type == MTL_TYPE_LIGHT_SOURCE) {
-		p.color = p.color * mtl.emittance;
-		p.remainingBounces = 0;
+
+	if (p.remainingBounces == 0) {
+		p.lastHit = -1;
 	}
 	else {
-		if (p.remainingBounces == 0) {
-			p.lastHit = -1;
+		if (mtl.type == MTL_TYPE_LIGHT_SOURCE) {
+			p.color = p.color * mtl.albedo;
+			p.remainingBounces = 0;
 		}
 		else {
-			float pdf;
-			glm::vec3 wo = cosHemisphereSampler(intersection.normal, &pdf, makeSeededRandomEngine(spp, idx, 0));
-			glm::vec3 bsdf = opaqueBsdf(p.ray.dir, wo, intersection.uv, intersection.normal, mtl);
-			p.color = (p.color * bsdf + mtl.emittance) / pdf;
-			//p.color = (wo + 1.f) / 2.f;
-			//p.color = (intersection.normal + 1.f) / 2.f;
-			p.ray.dir = wo;
-			p.ray.invDir = 1.f / wo;
+			auto rnd = makeSeededRandomEngine(spp, idx, 0);
+			if (mtl.type == MTL_TYPE_OPAQUE) {
+				if (glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
+					p.lastHit = -1;
+					p.remainingBounces = 0;
+				}
+				else {
+					float pdf;
+					glm::vec3 wo;
+					if (mtl.roughness > 0.9f)
+						wo = cosHemisphereSampler(intersection.normal, &pdf, rnd);
+					else
+						wo = GGXImportanceSampler(mtl.roughness, p.ray.dir, intersection.normal, &pdf, rnd);
+					if (glm::dot(wo, intersection.normal) < 0.f) {
+						p.lastHit = -1;
+						p.remainingBounces = 0;
+					}
+					else {
+						glm::vec3 bsdf = microFacetBrdf(p.ray.dir, wo, intersection.uv, intersection.normal, mtl);
+						p.color = p.color * bsdf / (pdf + FLT_EPSILON); // lambert is timed inside the bsdf
+						p.ray.dir = wo;
+						p.ray.invDir = 1.f / wo;
+					}
+				}
+			}
+			//if (mtl.type == MTL_TYPE_TRANSPARENT) {
+			// }
+
 			p.remainingBounces--;
 		}
 	}
