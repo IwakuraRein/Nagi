@@ -39,14 +39,15 @@ __device__ __host__ glm::vec3 nagi::GGXImportanceSampler(float alpha, const glm:
     float cosTheta2 = cosTheta * cosTheta;
     float sinTheta = sqrtf(1 - cosTheta2);
 
-    float denom = ((a2 - 1) * cosTheta2 + 1);
-    *pdf = (a2 * cosTheta * sinTheta) * INV_PI / (denom * denom + FLT_EPSILON);
-
     glm::vec3 T = getDifferentDir(normal);
     T = glm::normalize(glm::cross(T, normal));
     glm::vec3 B = glm::normalize(glm::cross(T, normal));
 
     glm::vec3 h{ T * cosf(phi) * sinTheta + B * sinf(phi) * sinTheta + normal * cosTheta };
+
+    float denom = ((a2 - 1) * cosTheta2 + 1);
+    *pdf = (a2 * cosTheta * sinTheta) * INV_PI / (denom * denom + FLT_EPSILON);
+
     return glm::normalize(glm::reflect(wi, h));
 }
 

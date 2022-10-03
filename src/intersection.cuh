@@ -59,6 +59,8 @@ inline __device__ __host__ bool vec3Comp(const glm::vec3& vec1, const glm::vec3&
 	return (vec1.x <= vec2.x) && (vec1.y <= vec2.y) && (vec1.z <= vec2.z);
 }
 
+__device__ __host__ bool rayBoxIntersect(const Ray& r, const glm::vec3& min, const glm::vec3& max, float* dist);
+
 __device__ __host__ bool rayBoxIntersect(const Ray& r, const BoundingBox& bbox, float* dist);
 
 __device__ __host__ bool rayTrigIntersect(const Ray& r, const Triangle& triangle, float* dist, glm::vec3* normal, glm::vec2* uv);

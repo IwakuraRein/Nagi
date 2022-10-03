@@ -5,7 +5,7 @@
 #include "intersection.cuh"
 
 #define MAX_TREE_DEPTH 8
-#define TERMINATE_NUM 8
+#define TERMINATE_NUM 16
 
 namespace nagi {
 
@@ -16,6 +16,9 @@ public:
 		// how many triangles (leaf node)
 		int size;
 		int children[8];
+		// store children's min and max. enough for ray-aabb intersection test
+		glm::vec3 childrenMin[8];
+		glm::vec3 childrenMax[8];
 		int trigIdxStart; // if >=0, leaf node
 		BoundingBox bbox;
 	};

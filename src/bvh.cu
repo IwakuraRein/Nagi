@@ -55,7 +55,7 @@ int BVH::buildNode(
 	if (trigs->size() > TERMINATE_NUM && layer != MAX_TREE_DEPTH) {
 
 		glm::vec3 eps{ FLT_EPSILON, FLT_EPSILON, FLT_EPSILON };
-		eps = glm::max(eps, bbox.halfExtent * 0.01f);
+		//eps = glm::max(eps, bbox.halfExtent * 0.01f);
 		glm::vec3 halfX = glm::vec3{ bbox.halfExtent.x, 0.f, 0.f };
 		glm::vec3 halfY = glm::vec3{ 0.f, bbox.halfExtent.y, 0.f };
 		glm::vec3 halfZ = glm::vec3{ 0.f, 0.f, bbox.halfExtent.z };
@@ -125,34 +125,76 @@ int BVH::buildNode(
 		Node node{
 			0,
 			{0},
+			{},
+			{},
 			-1,
 			bbox
 		};
 
 		int child;
 		child = buildNode(layer + 1, trigs0, b0);
-		if (child >= 0) node.children[node.size++] = child;
+		if (child >= 0) {
+			node.children[node.size] = child;
+			node.childrenMin[node.size] = b0.min;
+			node.childrenMax[node.size] = b0.max;
+			node.size++;
+		}
 
 		child = buildNode(layer + 1, trigs1, b1);
-		if (child >= 0) node.children[node.size++] = child;
+		if (child >= 0) {
+			node.children[node.size] = child;
+			node.childrenMin[node.size] = b1.min;
+			node.childrenMax[node.size] = b1.max;
+			node.size++;
+		}
 
 		child = buildNode(layer + 1, trigs2, b2);
-		if (child >= 0) node.children[node.size++] = child;
+		if (child >= 0) {
+			node.children[node.size] = child;
+			node.childrenMin[node.size] = b2.min;
+			node.childrenMax[node.size] = b2.max;
+			node.size++;
+		}
 
 		child = buildNode(layer + 1, trigs3, b3);
-		if (child >= 0) node.children[node.size++] = child;
+		if (child >= 0) {
+			node.children[node.size] = child;
+			node.childrenMin[node.size] = b3.min;
+			node.childrenMax[node.size] = b3.max;
+			node.size++;
+		}
 
 		child = buildNode(layer + 1, trigs4, b4);
-		if (child >= 0) node.children[node.size++] = child;
+		if (child >= 0) {
+			node.children[node.size] = child;
+			node.childrenMin[node.size] = b4.min;
+			node.childrenMax[node.size] = b4.max;
+			node.size++;
+		}
 
 		child = buildNode(layer + 1, trigs5, b5);
-		if (child >= 0) node.children[node.size++] = child;
+		if (child >= 0) {
+			node.children[node.size] = child;
+			node.childrenMin[node.size] = b5.min;
+			node.childrenMax[node.size] = b5.max;
+			node.size++;
+		}
 
 		child = buildNode(layer + 1, trigs6, b6);
-		if (child >= 0) node.children[node.size++] = child;
+		if (child >= 0) {
+			node.children[node.size] = child;
+			node.childrenMin[node.size] = b6.min;
+			node.childrenMax[node.size] = b6.max;
+			node.size++;
+		}
 
 		child = buildNode(layer + 1, trigs7, b7);
-		if (child >= 0) node.children[node.size++] = child;
+		if (child >= 0) {
+			node.children[node.size] = child;
+			node.childrenMin[node.size] = b7.min;
+			node.childrenMax[node.size] = b7.max;
+			node.size++;
+		}
 
 		if (node.size > 0) {
 			tree.push_back(std::move(node));
@@ -168,6 +210,8 @@ int BVH::buildNode(
 		Node node{
 			trigs->size(),
 			{0},
+			{},
+			{},
 			trigIndices->size(),
 			bbox
 		};

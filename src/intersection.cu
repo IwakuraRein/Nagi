@@ -5,21 +5,21 @@
 namespace nagi {
 
 // with reference to https://tavianator.com/2011/ray_box.html
-__device__ __host__ bool rayBoxIntersect(const Ray& r, const BoundingBox& bbox, float* dist) {
-	float tx1 = (bbox.min.x - r.origin.x) * r.invDir.x;
-	float tx2 = (bbox.max.x - r.origin.x) * r.invDir.x;
+__device__ __host__ bool rayBoxIntersect(const Ray& r, const glm::vec3& min, const glm::vec3& max, float* dist) {
+	float tx1 = (min.x - r.origin.x) * r.invDir.x;
+	float tx2 = (max.x - r.origin.x) * r.invDir.x;
 
 	float tmin = fminf(tx1, tx2);
 	float tmax = fmaxf(tx1, tx2);
 
-	float ty1 = (bbox.min.y - r.origin.y) * r.invDir.y;
-	float ty2 = (bbox.max.y - r.origin.y) * r.invDir.y;
+	float ty1 = (min.y - r.origin.y) * r.invDir.y;
+	float ty2 = (max.y - r.origin.y) * r.invDir.y;
 
 	tmin = fmaxf(tmin, fminf(ty1, ty2));
 	tmax = fminf(tmax, fmaxf(ty1, ty2));
 
-	float tz1 = (bbox.min.z - r.origin.z) * r.invDir.z;
-	float tz2 = (bbox.max.z - r.origin.z) * r.invDir.z;
+	float tz1 = (min.z - r.origin.z) * r.invDir.z;
+	float tz2 = (max.z - r.origin.z) * r.invDir.z;
 
 	tmin = fmaxf(tmin, fminf(tz1, tz2));
 	tmax = fminf(tmax, fmaxf(tz1, tz2));
@@ -30,14 +30,17 @@ __device__ __host__ bool rayBoxIntersect(const Ray& r, const BoundingBox& bbox, 
 	}
 	else return false;
 }
+__device__ __host__ bool rayBoxIntersect(const Ray& r, const BoundingBox& bbox, float* dist) {
+	return rayBoxIntersect(r, bbox.min, bbox.max, dist);
+}
 
 __device__ __host__ bool rayTrigIntersect(
 	const Ray& r, const Triangle& triangle, float* dist, glm::vec3* normal, glm::vec2* uv) {
 	glm::vec2 baryCoord;
 	if (glm::intersectRayTriangle(
 		r.origin, r.dir, triangle.vert0.position, triangle.vert1.position, triangle.vert2.position, baryCoord, *dist)) {
-		*normal = baryCoord.x * triangle.vert0.normal + baryCoord.y * triangle.vert1.normal + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.normal;
-		// uv needs another interpolation order. don't know why
+		//*normal = baryCoord.x * triangle.vert0.normal + baryCoord.y * triangle.vert1.normal + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.normal;
+		*normal = (1 - baryCoord.x - baryCoord.y) * triangle.vert0.normal + baryCoord.x * triangle.vert1.normal + baryCoord.y * triangle.vert2.normal;
 		//*uv = baryCoord.x * triangle.vert0.uv + baryCoord.y * triangle.vert1.uv + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.uv;
 		*uv = (1 - baryCoord.x - baryCoord.y) * triangle.vert0.uv + baryCoord.x * triangle.vert1.uv + baryCoord.y * triangle.vert2.uv;
 		return true;

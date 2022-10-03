@@ -128,7 +128,7 @@ void PathTracer::iterate() {
 		std::cout << "  Begin iteration " << spp << ". " << scene.config.spp - spp << " remaining." << std::endl;
 		if (printDetails) timer2 = std::chrono::high_resolution_clock::now();
 		dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
-		kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>>(window, spp, devRayPool1, scene.config.maxBounce, scene.cam);
+		kernInitializeRays << <blocksPerGrid, BLOCK_SIZE >> > (window, spp, devRayPool1, scene.config.maxBounce, scene.cam);
 		checkCUDAError("kernInitializeRays failed.");
 		bool firstIntersection = true;
 		int remainingRays = window.pixels;
@@ -153,7 +153,7 @@ void PathTracer::iterate() {
 		terminatedRayNum = 0;
 		if (printDetails) {
 			float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer2).count();
-			std::cout << "  Iteration " << spp << " finished. Time cost: " << runningTime << 
+			std::cout << "  Iteration " << spp << " finished. Time cost: " << runningTime <<
 				" seconds. Time Remaining: " << runningTime * (scene.config.spp - spp) << " seconds." << std::endl;
 		}
 	}
@@ -235,7 +235,7 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 
 }
 
-__global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, int rootIdx, BVH::Node* treeBuf, int* treeTrigIdx, Triangle* trigBuf, IntersectInfo* out) {
+__global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, BVH::Node rootNode, BVH::Node* treeBuf, int* treeTrigIdx, Triangle* trigBuf, IntersectInfo* out) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
@@ -245,44 +245,64 @@ __global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, int rootIdx, BVH
 	glm::vec2 pickedUV{ 0.f, 0.f };
 	glm::vec2 uv;
 	int pickedMtlIdx{ -1 };
-	float dist;
-	float minDist{ FLT_MAX };
+	float trigDist;
+	float minTrigD{ FLT_MAX };
+	float boxD;
+	BoundingBox lastTrigBox{};
 
 	BVH::Node stack[MAX_TREE_DEPTH + 1];
 	int searchedChildern[MAX_TREE_DEPTH + 1] = { 0 };
+	//float dstBuf1[MAX_TREE_DEPTH + 1];
+	//float dstBuf2[MAX_TREE_DEPTH + 1]; // store the dist of the node that has intersected triangle
+	//float* boxD = dstBuf1;
+	//float* minBoxD = dstBuf2;
+//#pragma unroll
+//	for (int i = 0; i < MAX_TREE_DEPTH + 1; i++) {
+//		minBoxD[i] = { FLT_MAX };
+//	}
 	int ptr = 0;
-	stack[0] = treeBuf[rootIdx]; // root node;
+	stack[0] = rootNode; // root node;
 	while (ptr >= 0) {
 		BVH::Node& node = stack[ptr];
-		if (node.trigIdxStart >= 0) { // leaf node
+		if (node.trigIdxStart < 0) { // not leaf node
+			if (node.size > searchedChildern[ptr]) {
+				int childNo = searchedChildern[ptr];
+				searchedChildern[ptr]++;
+				if (rayBoxIntersect(r, node.childrenMin[childNo], node.childrenMax[childNo], &boxD)) {
+					if (boxD < minTrigD) {
+						ptr++;
+						stack[ptr] = treeBuf[node.children[childNo]];
+						searchedChildern[ptr] = 0;
+						continue;
+					}
+				}
+			}
+			else {
+				searchedChildern[ptr] = 0;
+				ptr--;
+			}
+		}
+		else {
 			for (int i = node.trigIdxStart; i < node.trigIdxStart + node.size; i++) {
 				Triangle trig = trigBuf[treeTrigIdx[i]];
-				if (rayBoxIntersect(r, trig.bbox, &dist)) {
-					if (rayTrigIntersect(r, trig, &dist, &normal, &uv)) {
-						if (dist > 0.f && dist < minDist) {
-							minDist = dist;
-							pickedNormal = normal;
-							pickedUV = uv;
-							pickedMtlIdx = trig.mtlIdx;
+				if (rayBoxIntersect(r, trig.bbox, &trigDist)) {
+					if (boxBoxIntersect(lastTrigBox, trig.bbox) || trigDist < minTrigD) {
+						if (rayTrigIntersect(r, trig, &trigDist, &normal, &uv)) {
+							if (trigDist > 0.f && trigDist < minTrigD) {
+								minTrigD = trigDist;
+								pickedNormal = normal;
+								pickedUV = uv;
+								pickedMtlIdx = trig.mtlIdx;
+								lastTrigBox = trig.bbox;
+								////swap
+								//float* tmp = boxD;
+								//boxD = minBoxD;
+								//minBoxD = tmp;
+							}
 						}
 					}
 				}
 			}
-			searchedChildern[ptr] = 0;
-			ptr--;/*
-			pickedMtlIdx = node.idx;*/
-		}
-
-		else if (node.size > searchedChildern[ptr]) {
-			BVH::Node& child = treeBuf[node.children[searchedChildern[ptr]]];
-			searchedChildern[ptr]++;
-			if (rayBoxIntersect(r, child.bbox, &dist)) {
-				stack[ptr + 1] = child;
-				ptr++;
-				searchedChildern[ptr]=0;
-			}
-		}
-		else {
 			searchedChildern[ptr] = 0;
 			ptr--;
 		}
@@ -292,7 +312,7 @@ __global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, int rootIdx, BVH
 	result.mtlIdx = pickedMtlIdx;
 	result.normal = pickedNormal;
 	result.uv = pickedUV;
-	result.position = r.origin + r.dir * (minDist - 0.001f);
+	result.position = r.origin + r.dir * (minTrigD - 0.001f);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
 	out[idx] = result;
 }
@@ -301,7 +321,8 @@ int PathTracer::intersectionTest(int rayNum) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	//kernTrigIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, 0, scene.trigBuf.size()-1, devTrigBuf, devResults1);
 	//kernObjIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, devTrigBuf, devResults1);
-	kernBVHIntersectTest<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, bvh.rootIdx, bvh.devTree, bvh.devTreeTrigIdx, devTrigBuf, devResults1);
+	static BVH::Node root{ bvh.tree[bvh.rootIdx] };
+	kernBVHIntersectTest<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, devRayPool1, root, bvh.devTree, bvh.devTreeTrigIdx, devTrigBuf, devResults1);
 	checkCUDAError("kernBVHIntersectTest failed.");
 
 	rayNum = compactRays(rayNum, devRayPool1, devRayPool2, devResults1, devResults2);
@@ -317,9 +338,9 @@ void PathTracer::sortRays(int rayNum) {
 	thrust::device_ptr<Path> tRays{ devRayPool1 };
 	thrust::device_ptr<IntersectInfo> tResults{ devResults1 };
 
-	thrust::stable_sort_by_key(tResults, tResults+rayNum, tRays, IntersectionComp());
+	thrust::stable_sort_by_key(tResults, tResults + rayNum, tRays, IntersectionComp());
 	checkCUDAError("thrust::stable_sort_by_key failed.");
-	thrust::stable_sort(tResults, tResults+rayNum, IntersectionComp());
+	thrust::stable_sort(tResults, tResults + rayNum, IntersectionComp());
 	checkCUDAError("thrust::stable_sort failed.");
 }
 
@@ -347,16 +368,16 @@ __global__ void kernGenerateGbuffer(
 
 	// blend the gbuffer is good for denoising. 
 	// reference: https://github.com/tunabrain/tungsten/issues/69
-	normalBuf[pixel * 3]     *= (currentSpp - 1.f) / currentSpp;
+	normalBuf[pixel * 3] *= (currentSpp - 1.f) / currentSpp;
 	normalBuf[pixel * 3 + 1] *= (currentSpp - 1.f) / currentSpp;
 	normalBuf[pixel * 3 + 2] *= (currentSpp - 1.f) / currentSpp;
-	normalBuf[pixel * 3]     += intersect.normal.x;
+	normalBuf[pixel * 3] += intersect.normal.x;
 	normalBuf[pixel * 3 + 1] += intersect.normal.y;
 	normalBuf[pixel * 3 + 2] += intersect.normal.z;
-	albedoBuf[pixel * 3]     *= (currentSpp - 1.f) / currentSpp;
+	albedoBuf[pixel * 3] *= (currentSpp - 1.f) / currentSpp;
 	albedoBuf[pixel * 3 + 1] *= (currentSpp - 1.f) / currentSpp;
 	albedoBuf[pixel * 3 + 2] *= (currentSpp - 1.f) / currentSpp;
-	albedoBuf[pixel * 3]     += albedo.x;
+	albedoBuf[pixel * 3] += albedo.x;
 	albedoBuf[pixel * 3 + 1] += albedo.y;
 	albedoBuf[pixel * 3 + 2] += albedo.z;
 	depthBuf[pixel] *= (currentSpp - 1.f) / currentSpp;
@@ -364,7 +385,7 @@ __global__ void kernGenerateGbuffer(
 }
 void PathTracer::generateGbuffer(int rayNum, int spp) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernGenerateGbuffer<<<blocksPerGrid, BLOCK_SIZE>>>(
+	kernGenerateGbuffer << <blocksPerGrid, BLOCK_SIZE >> > (
 		rayNum, (float)spp, devRayPool1, devResults1, devMtlBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
 }
 
@@ -426,7 +447,7 @@ __global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* i
 
 int PathTracer::shade(int rayNum, int spp) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernShading <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+	kernShading << <blocksPerGrid, BLOCK_SIZE >> > (rayNum, spp, devRayPool1, devResults1, devMtlBuf);
 	checkCUDAError("kernShading failed.");
 
 	rayNum = compactRays(rayNum, devRayPool1, devRayPool2);
@@ -520,17 +541,17 @@ __global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* 
 	if (path.lastHit < 0) { // ray didn't hit anything, or didn't hit light source in the end
 		path.color = glm::vec3{ 0.f };
 	}
-	frameBuffer[path.pixelIdx * 3]     *= (currentSpp - 1.f) / currentSpp;
+	frameBuffer[path.pixelIdx * 3] *= (currentSpp - 1.f) / currentSpp;
 	frameBuffer[path.pixelIdx * 3 + 1] *= (currentSpp - 1.f) / currentSpp;
 	frameBuffer[path.pixelIdx * 3 + 2] *= (currentSpp - 1.f) / currentSpp;
-	frameBuffer[path.pixelIdx * 3]     += (path.color.x / currentSpp);
+	frameBuffer[path.pixelIdx * 3] += (path.color.x / currentSpp);
 	frameBuffer[path.pixelIdx * 3 + 1] += (path.color.y / currentSpp);
 	frameBuffer[path.pixelIdx * 3 + 2] += (path.color.z / currentSpp);
 }
 
 void PathTracer::writeFrameBuffer(int spp) {
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernWriteFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(window, (float)scene.config.spp, devTerminatedRays, devFrameBuf);
+	kernWriteFrameBuffer << <blocksPerGrid, BLOCK_SIZE >> > (window, (float)scene.config.spp, devTerminatedRays, devFrameBuf);
 
 }
 

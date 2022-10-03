@@ -5,7 +5,9 @@
 
 namespace nagi {
 
-inline bool objComp(const Object& o1, const Object& o2) { return o1.mtlIdx < o2.mtlIdx; }
+inline bool objComp(const Object& o1, const Object& o2) { 
+	return (o1.bbox.halfExtent.x * o1.bbox.halfExtent.y * o1.bbox.halfExtent.z) < 
+		(o2.bbox.halfExtent.x * o2.bbox.halfExtent.y * o2.bbox.halfExtent.z); }
 
 inline void updateTrigBoundingBox(Triangle& trig) {
 	// use epsilon to avoid bounding box having 0 volume.
@@ -296,7 +298,7 @@ void SceneLoader::loadObjects() {
 	scene.bbox.min -= /*FLT_EPSILON*/0.01f;
 	scene.bbox.max += /*FLT_EPSILON*/0.01f;
 
-	// sort objects according to their materials
+	// sort objects according to their volume
 	std::sort(scene.objBuf.begin(), scene.objBuf.end(), objComp);
 }
 
