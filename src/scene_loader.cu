@@ -147,9 +147,11 @@ void SceneLoader::loadMaterials() {
 						else if (doesFileExist(dir + "textures/" + texPath)) texPath = dir + "textures/" + texPath;
 						else throw std::runtime_error("Error: Base texture file doesn't exist.");
 					}
-					stbi_ldr_to_hdr_gamma(2.2f); // enable gamma correction for albedo
+					if (!strEndWith(texName, ".hdr"))
+						stbi_ldr_to_hdr_gamma(2.2f); // enable gamma correction for ldr picture
 					textures.emplace(texName, loadTexture(texPath, 4));
-					stbi_ldr_to_hdr_gamma(1.f);
+					if (!strEndWith(texName, ".hdr"))
+						stbi_ldr_to_hdr_gamma(1.f);
 				}
 				mtl.baseTex = textures[texName];
 				addTexture(mtl, TEXTURE_TYPE_BASE);
