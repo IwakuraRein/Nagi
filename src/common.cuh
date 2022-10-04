@@ -232,7 +232,6 @@ struct Object {
 	int mtlIdx;
 	BoundingBox bbox;
 	int treeRoot;
-	int treeDepth;
 };
 
 struct Texture {

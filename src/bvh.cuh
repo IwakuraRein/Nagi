@@ -4,7 +4,7 @@
 #include "common.cuh"
 #include "intersection.cuh"
 
-#define MAX_TREE_DEPTH 8
+#define MAX_TREE_DEPTH 10
 #define TERMINATE_NUM 16
 
 namespace nagi {

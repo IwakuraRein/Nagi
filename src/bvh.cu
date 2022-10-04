@@ -19,7 +19,8 @@ void BVH::build() {
 	std::cout << "Building BVH... ";
 
 	trigIndices = std::make_shared<std::list<int>>();
-
+	//assume we must reach max tree depth when triangles are larger than 16384
+	double depthBottom = pow(16384.0 / (double)TERMINATE_NUM, 1.0 / (double)MAX_TREE_DEPTH);
 	for (auto& obj : scene.objBuf) {
 		int trigCount = obj.trigIdxEnd - obj.trigIdxStart + 1;
 		auto initialIndices = std::make_shared<std::list<int>>();
@@ -32,15 +33,17 @@ void BVH::build() {
 		if (trigCount <= TERMINATE_NUM) {
 			tree.push_back(Node{ trigCount, {}, {}, {}, obj.trigIdxStart, obj.bbox });
 			obj.treeRoot = tree.size() - 1;
-			obj.treeDepth = 0;
+			//obj.treeDepth = 0;
 			trigIndices->splice(trigIndices->end(), *initialIndices);
 		}
 		else {
-			int depth = glm::clamp(int(log((double)trigCount) / log(8.0)), 1, MAX_TREE_DEPTH);
-			obj.treeRoot = buildNode(0, depth, initialIndices, obj.bbox);
-			obj.treeDepth = depth;
+			int depth = log((double)trigCount) / log(depthBottom);
+			obj.treeRoot = buildNode(0, MAX_TREE_DEPTH, initialIndices, obj.bbox);
+			//obj.treeDepth = depth;
 		}
+		std::cout << /*obj.treeDepth <<" "<<*/ trigCount << " " << trigIndices->size() << std::endl;
 		auto& node = tree[obj.treeRoot];
+		std::cout << "    "<< node.size << " " << node.trigIdxStart << std::endl;
 	}
 
 	cudaMalloc((void**)&devTreeTrigIdx, sizeof(int) * trigIndices->size());
