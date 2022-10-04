@@ -37,8 +37,8 @@ int main(int argc, char* argv[]) {
 			denoiser.reset(nullptr);
 		}
 
-		auto normal = pathTracer->getNormalBuffer();
-		saveHDR(scene.config.window, normal.get(), 3, "./normal_");
+		//auto normal = pathTracer->getNormalBuffer();
+		//saveHDR(scene.config.window, normal.get(), 3, "./normal_");
 
 		pathTracer.reset(nullptr);
 		bvh.reset(nullptr);

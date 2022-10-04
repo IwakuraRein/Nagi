@@ -29,11 +29,10 @@ public:
 
 	void build();
 	int BVH::buildNode(
-		int layer, std::shared_ptr<std::list<int>> trigs, BoundingBox bbox);
+		int layer, int maxLayer, std::shared_ptr<std::list<int>> trigs, BoundingBox bbox);
 	
 	Scene& scene;
 	std::vector<Node> tree;
-	int rootIdx;
 	int leafTrigs{ 0 };
 	std::shared_ptr<std::list<int>> trigIndices;
 	Node* devTree{ nullptr };

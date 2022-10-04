@@ -1,7 +1,7 @@
 {
     "graphics": {
 		"resolution": [1024, 1024],
-        "sample rate": 4,
+        "sample rate": 32,
         "max bounce": 64,
 		"denoiser": 2,
         "alpha": 1.0,
@@ -164,52 +164,51 @@
             "mesh": "quad",
             "material": "LeftWall"
         },
-        "teapot": {
+		        "ShortBox": {
             "position": [
                 0.328631,
-                0,
+                0.3,
                 0.374592
             ],
             "scale": [
-                0.7,
-                0.7,
-                0.7
+                0.594811,
+                0.604394,
+                0.6
             ],
             "rotation": [
-                0,
-                0, 0
+                90,
+                90, -163.36
             ],
-            "mesh": "teapot",
-            "material": "china"
+            "mesh": "cube",
+            "material": "ShortBox"
         },
-		"vase": {
-            "position": [
-			-0.4,
-               0, -0.2
+        "TallBox": {
+            "position": [-0.335439,
+                0.6, -0.291415
             ],
             "scale": [
-                3,
-                3,
-                3
+                0.607289,
+                0.597739,
+                1.2
             ],
             "rotation": [
+                90,
                 180,
-                0,
-                0
+                160.812
             ],
-            "mesh": "smooth_vase",
-            "material": "brass"
-        },	
+            "mesh": "cube",
+            "material": "TallBox"
+        },
         "LightPanel": {
             "position": [
                 0,
                 1.99,
-                0.2
+                0
             ],
             "scale": [
-                0.8,
-                0.8,
-                0.8
+                0.47,
+                0.1786,
+                0.38
             ],
             "rotation": [
                 0,
@@ -218,7 +217,7 @@
             ],
             "mesh": "quad",
             "material": "LightPanel"
-        }
+		}
     },
     "cameras": {
 		"position": [

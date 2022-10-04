@@ -26,6 +26,7 @@
         },
         "Floor": {
             "type": "Opaque",
+			"roughness": 0.3,
             "base texture": "WoodFloor.jpg"
         },
         "Ceiling": {
@@ -40,19 +41,33 @@
             "type": "Opaque",
             "base texture": "backwall.png"
         },
+        "ShortBox": {
+            "type": "Opaque",
+            "albedo": [
+                0.725,
+                0.71,
+                0.68
+            ]
+        },
         "brass": {
             "type": "Opaque",
 			"metalic": 1.0,
 			"roughness": 0.15,
 			"base texture": "Brass_Albedo.png"
         },
-        "glass": {
-            "type": "Transparent",
+        "china": {
+            "type": "Opaque",
+			"metalic": 0.0,
+			"roughness": 0.3,
+			"alabedo":[1,1,1]
+        },
+        "TallBox": {
+            "type": "Opaque",
             "albedo": [
-                1,1,1
-            ],
-			"roughness": 0,
-			"ior":1.5
+                0.725,
+                0.71,
+                0.68
+            ]
         },
         "LightPanel": {
             "type": "Light Source",
@@ -79,6 +94,7 @@
             "material": "BackWall"
         },
         "Floor": {
+			"position":[0,0,0],
             "scale": [
                 2,
                 2,
@@ -148,15 +164,33 @@
             "mesh": "quad",
             "material": "LeftWall"
         },
-		"vase": {
+        "teapot": {
             "position": [
-			-0.5,
-               0, 0.374592
+                0.328631,
+                0,
+                0.374592
             ],
             "scale": [
-                2,
-                2,
-                2
+                0.7,
+                0.7,
+                0.7
+            ],
+            "rotation": [
+                0,
+                0, 0
+            ],
+            "mesh": "teapot",
+            "material": "china"
+        },
+		"vase": {
+            "position": [
+			-0.4,
+               0, -0.2
+            ],
+            "scale": [
+                3,
+                3,
+                3
             ],
             "rotation": [
                 180,
@@ -165,35 +199,17 @@
             ],
             "mesh": "smooth_vase",
             "material": "brass"
-        },	 
-        "teapot": {
-            "position": [
-                0.328631,
-                0,
-                0.374592
-            ],
-            "scale": [
-                0.6,
-                0.6,
-                0.6
-            ],
-            "rotation": [
-                0,
-                0, 0
-            ],
-            "mesh": "teapot",
-            "material": "brass"
-        },
+        },	
         "LightPanel": {
             "position": [
                 0,
                 1.99,
-                0
+                0.2
             ],
             "scale": [
-                0.47,
-                0.1786,
-                0.38
+                0.8,
+                0.8,
+                0.8
             ],
             "rotation": [
                 0,
@@ -208,7 +224,7 @@
 		"position": [
 			0,
 			1,
-			6.8
+			3.5
 		],
 		"forward": [
 			0, 0, -1
@@ -216,6 +232,6 @@
 		"up": [
 			0, 1, 0
 		],
-		"fov": 19.5
+		"fov": 43.5
 	}
 }

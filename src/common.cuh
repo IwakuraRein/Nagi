@@ -226,11 +226,13 @@ struct Path {
 };
 
 struct Object {
-	Transform transform;
+	//Transform transform;
 	int trigIdxStart;
 	int trigIdxEnd;
 	int mtlIdx;
 	BoundingBox bbox;
+	int treeRoot;
+	int treeDepth;
 };
 
 struct Texture {
@@ -289,18 +291,6 @@ struct Scene {
 	std::vector<Object> objBuf;
 	std::vector<Material> mtlBuf;
 	std::vector<Triangle> trigBuf;
-
-	//Object* devObjBuf;
-	//Material* devMtlBuf;
-	//Triangle* devTrigBuf;
-
-	//thrust::device_vector<Object> devObjBuf2;
-	//thrust::device_vector<Material> devMtlBuf2;
-	//thrust::device_vector<Triangle> devTrigBuf2;
-
-	// The frame buffer is a rectangle of pixels stored from left-to-right, top-to-bottom.
-	//float* devFrameBuf;
-	//thrust::device_vector<float> devFrameBuf2;
 };
 extern Scene scene; // global variable
 

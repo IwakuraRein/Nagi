@@ -237,25 +237,23 @@ void SceneLoader::loadObjects() {
 		auto& items = object.value();
 		Object obj;
 		{
+			Transform transform{};
 			if (hasItem(items, "position")) {
 				auto& position = items["position"];
-				obj.transform.position = glm::vec3{ position[0], position[1], position[2] };
+				transform.position = glm::vec3{ position[0], position[1], position[2] };
 			}
-			else obj.transform.position = glm::vec3{ 0.f, 0.f, 0.f };
 
 			if (hasItem(items, "rotation")) {
 				auto& rotation = items["rotation"];
-				obj.transform.rotation = glm::radians(glm::vec3{ rotation[0], rotation[1], rotation[2] });
+				transform.rotation = glm::radians(glm::vec3{ rotation[0], rotation[1], rotation[2] });
 			}
-			else obj.transform.rotation = glm::vec3{ 0.f, 0.f, 0.f };
 
 			if (hasItem(items, "scale")) {
 				auto& scale = items["scale"];
-				obj.transform.scale = glm::vec3{ scale[0], scale[1], scale[2] };
+				transform.scale = glm::vec3{ scale[0], scale[1], scale[2] };
 			}
-			else obj.transform.scale = glm::vec3{ 1.f, 1.f, 1.f };
 
-			updateTransformMat(&obj.transform);
+			updateTransformMat(&transform);
 
 			if (hasItem(items, "material")) {
 				if (hasItem(mtlIndices, items["material"]))
@@ -280,12 +278,10 @@ void SceneLoader::loadObjects() {
 						else if (doesFileExist(dir + "models/" + meshPath)) meshPath = dir + "models/" + meshPath;
 						else throw std::runtime_error("Error: Model file doesn't exist.");
 					}
-					glm::ivec2 meshIdx = loadMesh(meshPath, obj);
+					glm::ivec2 meshIdx = loadMesh(meshPath, obj, transform);
 					//meshIndices.emplace(items["mesh"], meshIdx);
 					obj.trigIdxStart = meshIdx.x;
 					obj.trigIdxEnd = meshIdx.y;
-					obj.bbox.min -= 0.0001f;
-					obj.bbox.max += 0.0001f;
 				//}
 
 			}
@@ -295,8 +291,8 @@ void SceneLoader::loadObjects() {
 		if (printDetails) std::cout << " done." << std::endl;
 	}
 
-	scene.bbox.min -= /*FLT_EPSILON*/0.01f;
-	scene.bbox.max += /*FLT_EPSILON*/0.01f;
+	scene.bbox.min -= /*FLT_EPSILON*/0.001f;
+	scene.bbox.max += /*FLT_EPSILON*/0.001f;
 
 	// sort objects according to their volume
 	std::sort(scene.objBuf.begin(), scene.objBuf.end(), objComp);
@@ -355,7 +351,7 @@ void SceneLoader::loadCameras() {
 	if (printDetails) std::cout << " done." << std::endl;
 }
 
-glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj) {
+glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const Transform& transform) {
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
@@ -447,12 +443,12 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj) {
 	// move everything to world space and update bounding boxes
 	for (int i = meshTrigIdx.x; i <= meshTrigIdx.y; i++) {
 		Triangle& trig = scene.trigBuf[i];
-		vecTransform2(&trig.vert0.position, obj.transform.transformMat);
-		vecTransform2(&trig.vert1.position, obj.transform.transformMat);
-		vecTransform2(&trig.vert2.position, obj.transform.transformMat);
-		vecTransform2(&trig.vert0.normal, obj.transform.transformMat, 0.f);
-		vecTransform2(&trig.vert1.normal, obj.transform.transformMat, 0.f);
-		vecTransform2(&trig.vert2.normal, obj.transform.transformMat, 0.f);
+		vecTransform2(&trig.vert0.position, transform.transformMat);
+		vecTransform2(&trig.vert1.position, transform.transformMat);
+		vecTransform2(&trig.vert2.position, transform.transformMat);
+		vecTransform2(&trig.vert0.normal, transform.transformMat, 0.f);
+		vecTransform2(&trig.vert1.normal, transform.transformMat, 0.f);
+		vecTransform2(&trig.vert2.normal, transform.transformMat, 0.f);
 		trig.vert0.normal = glm::normalize(trig.vert0.normal);
 		trig.vert1.normal = glm::normalize(trig.vert1.normal);
 		trig.vert2.normal = glm::normalize(trig.vert2.normal);
@@ -466,8 +462,8 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj) {
 		updateBoundingBox(trig.vert1.position, &obj.bbox);
 		updateBoundingBox(trig.vert2.position, &obj.bbox);
 	}
-	obj.bbox.min -= 0.01f;
-	obj.bbox.max += 0.01f;
+	obj.bbox.min -= 0.001f;
+	obj.bbox.max += 0.001f;
 	return meshTrigIdx;
 }
 

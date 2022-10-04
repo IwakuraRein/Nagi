@@ -21,7 +21,7 @@ public:
 	static nlohmann::json readJson(const std::string& filePath);
 
 	void load();
-	glm::ivec2 loadMesh(const std::string& meshPath, Object& obj);
+	glm::ivec2 loadMesh(const std::string& meshPath, Object& obj, const Transform& transform);
 	static Texture loadTexture(const std::string& texPath, int desired_channel, bool srgb = false);
 	void loadConfig();
 	void loadMaterials();

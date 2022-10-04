@@ -46,7 +46,7 @@ __device__ __host__ glm::vec3 nagi::GGXImportanceSampler(float alpha, const glm:
     glm::vec3 h{ T * cosf(phi) * sinTheta + B * sinf(phi) * sinTheta + normal * cosTheta };
 
     float denom = ((a2 - 1) * cosTheta2 + 1);
-    *pdf = (a2 * cosTheta * sinTheta) * INV_PI / (denom * denom + FLT_EPSILON);
+    *pdf = (a2 * cosTheta * sinTheta) * INV_PI / (denom * denom * fabsf(glm::dot(wi, h)) + FLT_EPSILON);
 
     return glm::normalize(glm::reflect(wi, h));
 }

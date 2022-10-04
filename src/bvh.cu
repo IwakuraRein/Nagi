@@ -19,20 +19,34 @@ void BVH::build() {
 	std::cout << "Building BVH... ";
 
 	trigIndices = std::make_shared<std::list<int>>();
-	auto initialIndices = std::make_shared<std::list<int>>();
-	initialIndices->resize(scene.trigBuf.size());
-	int i = 0;
-	for (auto it = initialIndices->begin(); it != initialIndices->end(); it++) {
-		*it = i;
-		i++;
-	}
 
-	rootIdx = buildNode(0, initialIndices, scene.bbox);
+	for (auto& obj : scene.objBuf) {
+		int trigCount = obj.trigIdxEnd - obj.trigIdxStart + 1;
+		auto initialIndices = std::make_shared<std::list<int>>();
+		initialIndices->resize(trigCount);
+		int i = obj.trigIdxStart;
+		for (auto it = initialIndices->begin(); it != initialIndices->end(); it++) {
+			*it = i;
+			i++;
+		}
+		if (trigCount <= TERMINATE_NUM) {
+			tree.push_back(Node{ trigCount, {}, {}, {}, obj.trigIdxStart, obj.bbox });
+			obj.treeRoot = tree.size() - 1;
+			obj.treeDepth = 0;
+			trigIndices->splice(trigIndices->end(), *initialIndices);
+		}
+		else {
+			int depth = glm::clamp(int(log((double)trigCount) / log(8.0)), 1, MAX_TREE_DEPTH);
+			obj.treeRoot = buildNode(0, depth, initialIndices, obj.bbox);
+			obj.treeDepth = depth;
+		}
+		auto& node = tree[obj.treeRoot];
+	}
 
 	cudaMalloc((void**)&devTreeTrigIdx, sizeof(int) * trigIndices->size());
 	checkCUDAError("cudaMalloc devTreeTrigIdx failed.");
 
-	i = 0;
+	int i = 0;
 	for (auto it = trigIndices->begin(); it != trigIndices->end(); it++) {
 		cudaMemcpy(devTreeTrigIdx + i, &(*it), sizeof(int), cudaMemcpyHostToDevice);
 		i++;
@@ -50,9 +64,9 @@ void BVH::build() {
 }
 
 int BVH::buildNode(
-	int layer, std::shared_ptr<std::list<int>> trigs, BoundingBox bbox) {
+	int layer, int maxLayer, std::shared_ptr<std::list<int>> trigs, BoundingBox bbox) {
 	if (trigs->size() == 0) return -1;
-	if (trigs->size() > TERMINATE_NUM && layer != MAX_TREE_DEPTH) {
+	if (trigs->size() > TERMINATE_NUM && layer != maxLayer) {
 
 		glm::vec3 eps{ FLT_EPSILON, FLT_EPSILON, FLT_EPSILON };
 		//eps = glm::max(eps, bbox.halfExtent * 0.01f);
@@ -132,7 +146,7 @@ int BVH::buildNode(
 		};
 
 		int child;
-		child = buildNode(layer + 1, trigs0, b0);
+		child = buildNode(layer + 1, maxLayer, trigs0, b0);
 		if (child >= 0) {
 			node.children[node.size] = child;
 			node.childrenMin[node.size] = b0.min;
@@ -140,7 +154,7 @@ int BVH::buildNode(
 			node.size++;
 		}
 
-		child = buildNode(layer + 1, trigs1, b1);
+		child = buildNode(layer + 1, maxLayer, trigs1, b1);
 		if (child >= 0) {
 			node.children[node.size] = child;
 			node.childrenMin[node.size] = b1.min;
@@ -148,7 +162,7 @@ int BVH::buildNode(
 			node.size++;
 		}
 
-		child = buildNode(layer + 1, trigs2, b2);
+		child = buildNode(layer + 1, maxLayer, trigs2, b2);
 		if (child >= 0) {
 			node.children[node.size] = child;
 			node.childrenMin[node.size] = b2.min;
@@ -156,7 +170,7 @@ int BVH::buildNode(
 			node.size++;
 		}
 
-		child = buildNode(layer + 1, trigs3, b3);
+		child = buildNode(layer + 1, maxLayer, trigs3, b3);
 		if (child >= 0) {
 			node.children[node.size] = child;
 			node.childrenMin[node.size] = b3.min;
@@ -164,7 +178,7 @@ int BVH::buildNode(
 			node.size++;
 		}
 
-		child = buildNode(layer + 1, trigs4, b4);
+		child = buildNode(layer + 1, maxLayer, trigs4, b4);
 		if (child >= 0) {
 			node.children[node.size] = child;
 			node.childrenMin[node.size] = b4.min;
@@ -172,7 +186,7 @@ int BVH::buildNode(
 			node.size++;
 		}
 
-		child = buildNode(layer + 1, trigs5, b5);
+		child = buildNode(layer + 1, maxLayer, trigs5, b5);
 		if (child >= 0) {
 			node.children[node.size] = child;
 			node.childrenMin[node.size] = b5.min;
@@ -180,7 +194,7 @@ int BVH::buildNode(
 			node.size++;
 		}
 
-		child = buildNode(layer + 1, trigs6, b6);
+		child = buildNode(layer + 1, maxLayer, trigs6, b6);
 		if (child >= 0) {
 			node.children[node.size] = child;
 			node.childrenMin[node.size] = b6.min;
@@ -188,7 +202,7 @@ int BVH::buildNode(
 			node.size++;
 		}
 
-		child = buildNode(layer + 1, trigs7, b7);
+		child = buildNode(layer + 1, maxLayer, trigs7, b7);
 		if (child >= 0) {
 			node.children[node.size] = child;
 			node.childrenMin[node.size] = b7.min;
