@@ -18,16 +18,17 @@ void BVH::build() {
 	timer = std::chrono::high_resolution_clock::now();
 	std::cout << "Building BVH... ";
 
-	trigIndices = std::make_shared<std::list<int>>();
+	trigIndices = std::make_shared<std::list<std::pair<int, Triangle*>>>();
 	//assume we must reach max tree depth when triangles are larger than 16384
 	double depthBottom = pow(16384.0 / (double)TERMINATE_NUM, 1.0 / (double)MAX_TREE_DEPTH);
 	for (auto& obj : scene.objBuf) {
 		int trigCount = obj.trigIdxEnd - obj.trigIdxStart + 1;
-		auto initialIndices = std::make_shared<std::list<int>>();
+		auto initialIndices = std::make_shared<std::list<std::pair<int, Triangle*>>>();
 		initialIndices->resize(trigCount);
 		int i = obj.trigIdxStart;
 		for (auto it = initialIndices->begin(); it != initialIndices->end(); it++) {
-			*it = i;
+			it->first = i;
+			it->second = &scene.trigBuf[i];
 			i++;
 		}
 		if (trigCount <= TERMINATE_NUM) {
@@ -41,9 +42,9 @@ void BVH::build() {
 			obj.treeRoot = buildNode(0, depth, initialIndices, obj.bbox);
 			//obj.treeDepth = depth;
 		}
-		std::cout << obj.treeRoot <<" "<< trigCount << " " << trigIndices->size() << std::endl;
+		//std::cout << obj.treeRoot <<" "<< trigCount << " " << trigIndices->size() << std::endl;
 		auto& node = tree[obj.treeRoot];
-		std::cout << "    "<< node.size << " " << node.trigIdxStart << std::endl;
+		//std::cout << "    "<< node.size << " " << node.trigIdxStart << std::endl;
 	}
 
 	cudaMalloc((void**)&devTreeTrigIdx, sizeof(int) * trigIndices->size());
@@ -67,7 +68,7 @@ void BVH::build() {
 }
 
 int BVH::buildNode(
-	int layer, int maxLayer, std::shared_ptr<std::list<int>> trigs, BoundingBox bbox) {
+	int layer, int maxLayer, std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs, BoundingBox bbox) {
 	if (trigs->size() == 0) return -1;
 	if (trigs->size() > TERMINATE_NUM && layer != maxLayer) {
 
@@ -98,19 +99,19 @@ int BVH::buildNode(
 		b7.min -= eps; b7.max += eps;
 
 		// store children's triangles
-		std::shared_ptr<std::list<int>> trigs0{ new std::list<int> };
-		std::shared_ptr<std::list<int>> trigs1{ new std::list<int> };
-		std::shared_ptr<std::list<int>> trigs2{ new std::list<int> };
-		std::shared_ptr<std::list<int>> trigs3{ new std::list<int> };
-		std::shared_ptr<std::list<int>> trigs4{ new std::list<int> };
-		std::shared_ptr<std::list<int>> trigs5{ new std::list<int> };
-		std::shared_ptr<std::list<int>> trigs6{ new std::list<int> };
-		std::shared_ptr<std::list<int>> trigs7{ new std::list<int> };
+		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs0 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
+		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs1 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
+		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs2 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
+		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs3 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
+		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs4 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
+		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs5 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
+		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs6 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
+		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs7 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
 
 		// find triangles
 
 		for (auto it = trigs->begin(); it != trigs->end(); it++) {
-			Triangle t = scene.trigBuf[*it];
+			Triangle t = scene.trigBuf[it->first];
 			if (tirgBoxIntersect(t, b0)) {
 				trigs0->push_back(*it);
 			}

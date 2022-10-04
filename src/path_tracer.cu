@@ -557,34 +557,6 @@ void PathTracer::writeFrameBuffer(int spp) {
 
 }
 
-//__global__ void kernTest(Path* rayPool, Triangle* trigBuf, int num, float* frameBuffer) {
-//	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-//	if (idx >= window.pixels) return;
-//	Ray r = rayPool[idx].ray;
-//	glm::vec3 normal;
-//	glm::vec3 pickedNormal{ 0.f, 0.f, 0.f };
-//	float dist;
-//	float minDist{ FLT_MAX };
-//	bool found{ false };
-//	for (int i = 0; i < num; i++) {
-//		Triangle trig = trigBuf[i];
-//		if (rayBoxIntersect(r, trig.bbox, &dist)) {
-//			if (rayTrigIntersect(r, trig, &dist, &normal)) {
-//				if (dist < minDist) {
-//					minDist = dist;
-//					pickedNormal = normal;
-//					found = true;
-//				}
-//			}
-//		}
-//	}
-//	if (found) {
-//		frameBuffer[idx * 3] = (pickedNormal.x + 1.f) / 2.f;
-//		frameBuffer[idx * 3 + 1] = (pickedNormal.y + 1.f) / 2.f;
-//		frameBuffer[idx * 3 + 2] = (pickedNormal.z + 1.f) / 2.f;
-//	}
-//}
-
 std::unique_ptr<float[]> PathTracer::getFrameBuffer() {
 	if (devFrameBuf) {
 		std::unique_ptr<float[]> ptr{ new float[window.pixels * 3] };
