@@ -317,7 +317,7 @@ __global__ void kernBVHIntersectTest(
 
 int PathTracer::intersectionTest(int rayNum) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	//kernTrigIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, 0, scene.trigBuf.size()-1, devTrigBuf, devResults1);
+	kernTrigIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, 0, scene.trigBuf.size()-1, devTrigBuf, devResults1);
 	//kernObjIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, devTrigBuf, devResults1);
 	kernBVHIntersectTest<<<blocksPerGrid, BLOCK_SIZE>>> (
 		rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, bvh.devTree, bvh.devTreeTrigIdx, devTrigBuf, devResults1);

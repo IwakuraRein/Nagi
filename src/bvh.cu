@@ -31,17 +31,17 @@ void BVH::build() {
 			i++;
 		}
 		if (trigCount <= TERMINATE_NUM) {
-			tree.push_back(Node{ trigCount, {}, {}, {}, obj.trigIdxStart, obj.bbox });
+			tree.push_back(Node{ trigCount, {}, {}, {}, (int)trigIndices->size(), obj.bbox });
 			obj.treeRoot = tree.size() - 1;
 			//obj.treeDepth = 0;
 			trigIndices->splice(trigIndices->end(), *initialIndices);
 		}
 		else {
 			int depth = log((double)trigCount) / log(depthBottom);
-			obj.treeRoot = buildNode(0, MAX_TREE_DEPTH, initialIndices, obj.bbox);
+			obj.treeRoot = buildNode(0, depth, initialIndices, obj.bbox);
 			//obj.treeDepth = depth;
 		}
-		std::cout << /*obj.treeDepth <<" "<<*/ trigCount << " " << trigIndices->size() << std::endl;
+		std::cout << obj.treeRoot <<" "<< trigCount << " " << trigIndices->size() << std::endl;
 		auto& node = tree[obj.treeRoot];
 		std::cout << "    "<< node.size << " " << node.trigIdxStart << std::endl;
 	}

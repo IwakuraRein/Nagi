@@ -5,11 +5,11 @@
 
 namespace nagi {
 
-inline bool objComp(const Object& o1, const Object& o2) { 
-	return (o1.bbox.halfExtent.x * o1.bbox.halfExtent.y * o1.bbox.halfExtent.z) < 
+bool objComp(const Object& o1, const Object& o2) { 
+	return (o1.bbox.halfExtent.x * o1.bbox.halfExtent.y * o1.bbox.halfExtent.z) >
 		(o2.bbox.halfExtent.x * o2.bbox.halfExtent.y * o2.bbox.halfExtent.z); }
 
-inline void updateTrigBoundingBox(Triangle& trig) {
+void updateTrigBoundingBox(Triangle& trig) {
 	// use epsilon to avoid bounding box having 0 volume.
 	// FLT_EPSILON isn't enough. try using a larger number.
 	updateBoundingBox(glm::min(trig.vert0.position, trig.vert1.position, trig.vert2.position) - /*FLT_EPSILON*/ 0.0001f,
