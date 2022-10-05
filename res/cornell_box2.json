@@ -1,7 +1,7 @@
 {
     "graphics": {
 		"resolution": [1024, 1024],
-        "sample rate": 32,
+        "sample rate": 4,
         "max bounce": 64,
 		"denoiser": 2,
         "alpha": 1.0,
@@ -65,11 +65,11 @@
 			"roughness": 0.15,
 			"base texture": "Brass_Albedo.png"
         },
-        "china": {
+        "mirror": {
             "type": "Opaque",
-			"metallic": 0.0,
-			"roughness": 0.1,
-			"alabedo":[1,1,1]
+			"metallic": 1.0,
+			"roughness": 0.0,
+			"albedo":[1,1,1]
         },
         "TallBox": {
             "type": "Opaque",
@@ -210,6 +210,24 @@
             "mesh": "smooth_vase",
             "material": "brass"
         },	
+		"mirror": {
+            "position": [
+			-0.65,
+			0.26,
+			0.5],
+            "scale": [
+                0.6,
+                0.6,
+                0.6
+            ],
+            "rotation": [
+                -120,
+                45,
+                0
+            ],
+			"material": "mirror",
+			"mesh":"quad"
+		},
         "LightPanel": {
             "position": [
                 0,

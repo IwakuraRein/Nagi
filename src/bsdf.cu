@@ -5,10 +5,9 @@ namespace nagi {
 // reference: https://learnopengl.com/PBR/Theory
 __device__ glm::vec3 nagi::microFacetBrdf(
 	const glm::vec3& wi, const glm::vec3& wo, const glm::vec3& normal, const glm::vec3& albedo, float metallic, float alpha) {
-	float D, G;
+	float G, D;
 	glm::vec3 F;
 	glm::vec3 h = halfway(-wi, wo);
-
 	float nh = fmaxf(glm::dot(normal, h), 0.f);
 	float a2 = alpha * alpha;
 	D = alpha / (nh * nh * (a2 - 1.f) + 1.f);

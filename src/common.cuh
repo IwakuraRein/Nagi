@@ -54,8 +54,8 @@
 
 #define BLOCK_SIZE 128
 
-#define HALF_FRAME_HEIGHT 100.f
-#define FOCAL_MULTIPLIER 1000.f // use a large number to work around float's precision problem
+#define HALF_FILM_HEIGHT 0.012f // 24 x 36 mm film
+#define CAMERA_MULTIPLIER 1000.f // multiply a large number to work around float's precision problem
 
 // CUDA 11.3 has added device code support for new C++ keywords: `constexpr` and `auto`.
 // In CUDA C++, `__device__` and `__constant__` variables can now be declared `constexpr`.
@@ -133,12 +133,6 @@ inline void hashCombine(std::size_t& seed, const T& v, Rest... rest) {
 	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 	hashCombine(seed, rest...);
 }
-//template <class T>
-//inline void hashCombine(std::size_t& seed, const T& v)
-//{
-//	std::hash<T> hasher;
-//	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-//}
 
 bool doesFileExist(const std::string& name);
 
@@ -182,7 +176,7 @@ struct Camera {
 	float fov{ 1.f };
 	float aspect{ 1.77777777777778f };
 	float focusDistance{ 1.f };
-	float fNumber{ 1000000.f };
+	float apenture{ 0.f };
 	glm::vec3 position{ 0.f, 0.f, 0.f };
 	glm::vec3 upDir{ 0.f, -1.f, 0.f };
 	glm::vec3 rightDir{ 1.f, 0.f, 0.f };

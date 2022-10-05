@@ -50,7 +50,7 @@
 			"position": [
 			0,0.15,0],
 			"rotation":[
-			-90,0,25],
+			-90,0,10],
 			"material":"wall",
 			"mesh": "quad"
 		},
@@ -65,7 +65,7 @@
 			0.15,
 			0.6],
 			"rotation":[
-			-90,0,25],
+			-90,0,10],
 			"material":"wall",
 			"mesh": "quad"
 		},
@@ -80,7 +80,7 @@
 			0.15,
 			1.2],
 			"rotation":[
-			-90,0,25],
+			-90,0,10],
 			"material":"wall",
 			"mesh": "quad"
 		},
@@ -91,11 +91,11 @@
                 0.55
             ],
 			"position": [
-			-1.8,
+			-2.4,
 			0.15,
 			-1.8],
 			"rotation":[
-			-90,0,25],
+			-90,0,10],
 			"material":"wall",
 			"mesh": "quad"
 		},
@@ -106,11 +106,11 @@
                 0.55
             ],
 			"position": [
-			-1.2,
+			-1.5,
 			0.15,
 			-1.2],
 			"rotation":[
-			-90,0,25],
+			-90,0,10],
 			"material":"wall",
 			"mesh": "quad"
 		},
@@ -121,9 +121,11 @@
                 0.55
             ],
 			"position": [
-			-0.6,
+			-0.7,
 			0.15,
 			-0.6],
+			"rotation":[
+			-90,0,10],
 			"material":"wall",
 			"mesh": "quad"
 		},
@@ -149,18 +151,17 @@
     },
     "cameras": {
             "position": [
-                2,
+                1.6,
                 0.4,
                 3.3
             ],
             "look at": [
-                -2, -0.4, -3.3
+                0, 0, 0
             ],
             "up": [
                 0, 1, 0
             ],
-            "fov": 35,
-			"f-number": 24,
-			"focus distance": 3.5
+            "fov": 40,
+			"f-number": 0.5
         }
 }

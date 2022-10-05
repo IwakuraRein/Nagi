@@ -14,7 +14,8 @@ thrust::default_random_engine makeSeededRandomEngine(int iter, int index, int de
 
 __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& normal, float* pdf, thrust::default_random_engine& rng);
 
-__device__ __host__ glm::vec3 GGXImportanceSampler(float alpha, const glm::vec3& wi, const glm::vec3& normal, float* pdf, thrust::default_random_engine& rng);
+__device__ __host__ glm::vec3 GGXImportanceSampler(
+	float alpha, const glm::vec3& wi, const glm::vec3& normal, float* pdf, thrust::default_random_engine& rng);
 
 __device__ __host__ glm::vec3 uniformHemisphereSampler(const glm::vec3& normal, float* pdf, thrust::default_random_engine& rng);
 

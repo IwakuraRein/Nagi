@@ -344,9 +344,6 @@ void SceneLoader::loadCameras() {
 	if (hasItem(camera, "focus distance")) {
 		cam.focusDistance = camera["focus distance"];
 	}
-	if (hasItem(camera, "f-number")) {
-		cam.fNumber = camera["f-number"];
-	}
 
 	if (hasItem(camera, "near")) {
 		cam.near = camera["near"];
@@ -373,18 +370,22 @@ void SceneLoader::loadCameras() {
 	else if (hasItem(camera, "look at")) {
 		auto& lookAt = camera["look at"];
 		glm::vec3 lookAtVec{ lookAt[0], lookAt[1], lookAt[2] };
-		//cam.focusDistance = glm::length(lookAtVec - cam.position);
+		cam.focusDistance = glm::length(lookAtVec - cam.position);
 		cam.forwardDir = glm::normalize(lookAtVec - cam.position);
 	}
 	cam.rightDir = glm::normalize(glm::cross(cam.forwardDir, cam.upDir));
 
-	cam.halfH = cam.focusDistance * glm::tan(cam.fov/2.f);
+	if (hasItem(camera, "f-number")) {
+		cam.apenture = HALF_FILM_HEIGHT / glm::tan(cam.fov / 2.f) / (float)camera["f-number"] * 0.5f;
+	}
+
+	cam.halfH = cam.focusDistance * glm::tan(cam.fov/2.f) * CAMERA_MULTIPLIER;
 	cam.halfW = cam.halfH * cam.aspect;
 	cam.pixelHeight = cam.halfH * 2.f / scene.config.window.height;
 	cam.pixelWidth = cam.halfW * 2.f / scene.config.window.width;
 	cam.halfPixelHeight = cam.pixelHeight / 2.f;
 	cam.halfPixelWidth = cam.pixelWidth / 2.f;
-	cam.filmOrigin = cam.position + cam.forwardDir * cam.focusDistance - cam.rightDir * cam.halfW + cam.upDir * cam.halfH;
+	cam.filmOrigin = cam.position + cam.forwardDir * cam.focusDistance * CAMERA_MULTIPLIER - cam.rightDir * cam.halfW + cam.upDir * cam.halfH;
 
 	scene.cam = cam;
 

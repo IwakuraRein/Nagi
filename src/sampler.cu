@@ -28,7 +28,8 @@ __device__ __host__ glm::vec3 getDifferentDir(const glm::vec3& dir) {
 }
 
 // reference: https://agraphicsguy.wordpress.com/2015/11/01/sampling-microfacet-brdf/
-__device__ __host__ glm::vec3 nagi::GGXImportanceSampler(float alpha, const glm::vec3& wi, const glm::vec3& normal, float* pdf, thrust::default_random_engine& rng) {
+__device__ __host__ glm::vec3 nagi::GGXImportanceSampler(
+    float alpha, const glm::vec3& wi, const glm::vec3& normal, float* pdf, thrust::default_random_engine& rng) {
     thrust::uniform_real_distribution<float> u01(0, 1);
     float rnd1 = u01(rng);
     float rnd2 = u01(rng);

@@ -457,17 +457,16 @@ __global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* i
 					}
 					else roughness = mtl.roughness;
 
-					float pdf;
-					glm::vec3 wo;
+					float pdf, pdf2;
+					glm::vec3 wo, wo2;
 					thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 					float r = u01(rnd);
-					if (r < 0.5f + metallic / 2.f) {
-						wo = GGXImportanceSampler(roughness, p.ray.dir, normal, &pdf, rnd);
-					}
-					else {
-						wo = cosHemisphereSampler(normal, &pdf, rnd);
-					}
-						
+					float s = 0.5f + metallic / 2.f;
+					wo = GGXImportanceSampler(roughness, p.ray.dir, normal, &pdf, rnd);
+					wo2 = cosHemisphereSampler(normal, &pdf2, rnd);
+					if (r > s) wo = wo2;
+					pdf = s * pdf + (1.f - s) * pdf2;
+
 					if (glm::dot(wo, normal) < 0.f || pdf < PDF_EPSILON) {
 						//p.lastHit = -1;
 						p.color = glm::vec3{ 0.f };
@@ -558,7 +557,7 @@ __global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, in
 	//glm::vec3 dir = ndc - cam.position;
 
 	float theta = TWO_PI * u01(rng);
-	float r = u01(rng) * cam.focusDistance / cam.fNumber * 0.5f;
+	float r = u01(rng) * cam.apenture;
 
 	rnd1 = u01(rng) - 0.5f;
 	rnd2 = u01(rng) - 0.5f;
@@ -568,11 +567,10 @@ __global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, in
 		+ cam.rightDir * (((float)px + rnd2) * cam.pixelWidth + cam.halfPixelWidth);
 	glm::vec3 offset = -cam.upDir * r * glm::cos(theta);
 	offset += cam.rightDir * r * glm::sin(theta);
-	glm::vec3 lookFrom = cam.position + offset;
 
-	path.ray.dir = glm::normalize(lookAt - lookFrom);
+	path.ray.dir = glm::normalize(lookAt - cam.position - offset* CAMERA_MULTIPLIER);
 	path.ray.invDir = 1.f / path.ray.dir;
-	path.ray.origin = lookFrom;
+	path.ray.origin = cam.position + offset;
 	path.lastHit = 1;
 	path.color = glm::vec3{ 1.f, 1.f, 1.f };
 	rayPool[idx] = path;
