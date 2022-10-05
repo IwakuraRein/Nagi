@@ -76,6 +76,8 @@ __device__ __host__ void vecTransform2(glm::vec3* vec, const glm::mat4& mat, flo
 __device__ __host__ void updateTransformMat(Transform* t) {
 	t->transformMat = getTransformMat(t->position, t->rotation, t->scale);
 	t->invTransformMat = glm::inverse(t->transformMat);
+	t->normalTransformMat = getTransformMat(t->position, t->rotation, 1.f / t->scale);
+	t->invNormalTransformMat = glm::inverse(t->normalTransformMat);
 }
 
 __device__ __host__ glm::mat4 getTransformMat(const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale) {

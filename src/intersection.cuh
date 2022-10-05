@@ -63,7 +63,8 @@ __device__ __host__ bool rayBoxIntersect(const Ray& r, const glm::vec3& min, con
 
 __device__ __host__ bool rayBoxIntersect(const Ray& r, const BoundingBox& bbox, float* dist);
 
-__device__ __host__ bool rayTrigIntersect(const Ray& r, const Triangle& triangle, float* dist, glm::vec3* normal, glm::vec2* uv);
+__device__ __host__ bool rayTrigIntersect(
+	const Ray& r, const Triangle& triangle, float* dist, glm::vec3* normal, glm::vec3* tangent, glm::vec2* uv);
 
 __device__ __host__ bool boxBoxIntersect(const BoundingBox& b1, const BoundingBox& b2/*, BoundingBox* overlap*/);
 

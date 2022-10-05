@@ -40,7 +40,7 @@ nagi::SceneLoader::~SceneLoader() {
 				destroyedTextures.push_back(mtl.roughnessTex.devTexture);
 			}
 		}
-		if (hasTexture(mtl, TEXTURE_TYPE_METALNESS)) {
+		if (hasTexture(mtl, TEXTURE_TYPE_METALLIC)) {
 			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.metallicTex.devArray) == destroyedArrays.end()) {
 				cudaFreeArray(mtl.metallicTex.devArray);
 				destroyedArrays.push_back(mtl.metallicTex.devArray);
@@ -48,6 +48,16 @@ nagi::SceneLoader::~SceneLoader() {
 			if (find(destroyedTextures.begin(), destroyedTextures.end(), mtl.metallicTex.devTexture) == destroyedTextures.end()) {
 				cudaDestroyTextureObject(mtl.metallicTex.devTexture);
 				destroyedTextures.push_back(mtl.metallicTex.devTexture);
+			}
+		}
+		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.normalTex.devArray) == destroyedArrays.end()) {
+				cudaFreeArray(mtl.normalTex.devArray);
+				destroyedArrays.push_back(mtl.normalTex.devArray);
+			}
+			if (find(destroyedTextures.begin(), destroyedTextures.end(), mtl.normalTex.devTexture) == destroyedTextures.end()) {
+				cudaDestroyTextureObject(mtl.normalTex.devTexture);
+				destroyedTextures.push_back(mtl.normalTex.devTexture);
 			}
 		}
 	}
@@ -138,7 +148,7 @@ void SceneLoader::loadMaterials() {
 			}
 
 			else if (hasItem(items, "base texture")) {
-				std::string texName(items["base texture"]);
+				std::string texName{ items["base texture"] };
 				texName = "base" + texName; // encoding texture's path with its type
 				if (!hasItem(textures, texName)) {
 					std::string texPath = items["base texture"];
@@ -156,7 +166,7 @@ void SceneLoader::loadMaterials() {
 						stbi_ldr_to_hdr_gamma(1.f);
 				}
 				mtl.baseTex = textures[texName];
-				addTexture(mtl, TEXTURE_TYPE_BASE);
+				addTextureType(mtl, TEXTURE_TYPE_BASE);
 			}
 			else {
 				if (hasItem(items, "albedo")) {
@@ -166,7 +176,8 @@ void SceneLoader::loadMaterials() {
 			}
 
 			if (hasItem(items, "roughness texture")) {
-				std::string texName(items["base texture"]);
+				auto hehe = items["roughness texture"];
+				std::string texName{ items["roughness texture"] };
 				texName = "roughness" + texName; // encoding texture's path with its type
 				if (!hasItem(textures, texName)) {
 					std::string texPath = items["roughness texture"];
@@ -181,7 +192,7 @@ void SceneLoader::loadMaterials() {
 				}
 
 				mtl.roughnessTex = textures[texName];
-				addTexture(mtl, TEXTURE_TYPE_ROUGHNESS);
+				addTextureType(mtl, TEXTURE_TYPE_ROUGHNESS);
 			}
 			else {
 				if (hasItem(items, "roughness")) {
@@ -190,8 +201,8 @@ void SceneLoader::loadMaterials() {
 			}
 
 			if (hasItem(items, "metallic texture")) {
-				std::string texName(items["base texture"]);
-				texName = "roughness" + texName; // encoding texture's path with its type
+				std::string texName{ items["metallic texture"] };
+				texName = "metallic" + texName; // encoding texture's path with its type
 				if (!hasItem(textures, texName)) {
 					std::string texPath = items["metallic texture"];
 					if (doesFileExist(texPath)); // do nothing
@@ -199,18 +210,37 @@ void SceneLoader::loadMaterials() {
 						std::string dir = strRightStrip(filePath, getFileName(filePath));
 						if (doesFileExist(dir + texPath)) texPath = dir + texPath;
 						else if (doesFileExist(dir + "textures/" + texPath)) texPath = dir + "textures/" + texPath;
-						else throw std::runtime_error("Error: Metalness texture file doesn't exist.");
+						else throw std::runtime_error("Error: Metallic texture file doesn't exist.");
 					}
 					textures.emplace(texName, loadTexture(texPath, 1));
 				}
 
 				mtl.metallicTex = textures[texName];
-				addTexture(mtl, TEXTURE_TYPE_METALNESS);
+				addTextureType(mtl, TEXTURE_TYPE_METALLIC);
 			}
 			else {
 				if (hasItem(items, "metallic")) {
 					mtl.metallic = items["metallic"];
 				}
+			}
+
+			if (hasItem(items, "normal texture")) {
+				std::string texName{ items["normal texture"] };
+				texName = "normal" + texName; // encoding texture's path with its type
+				if (!hasItem(textures, texName)) {
+					std::string texPath = items["normal texture"];
+					if (doesFileExist(texPath)); // do nothing
+					else {
+						std::string dir = strRightStrip(filePath, getFileName(filePath));
+						if (doesFileExist(dir + texPath)) texPath = dir + texPath;
+						else if (doesFileExist(dir + "textures/" + texPath)) texPath = dir + "textures/" + texPath;
+						else throw std::runtime_error("Error: Normal texture file doesn't exist.");
+					}
+					textures.emplace(texName, loadTexture(texPath, 4));
+				}
+
+				mtl.normalTex = textures[texName];
+				addTextureType(mtl, TEXTURE_TYPE_NORMAL);
 			}
 
 			//if (hasItem(items, "fresnel")) {
@@ -311,6 +341,13 @@ void SceneLoader::loadCameras() {
 		cam.fov = glm::radians((float)camera["fov"]);
 	}
 
+	if (hasItem(camera, "focus distance")) {
+		cam.focusDistance = camera["focus distance"];
+	}
+	if (hasItem(camera, "f-number")) {
+		cam.fNumber = camera["f-number"];
+	}
+
 	if (hasItem(camera, "near")) {
 		cam.near = camera["near"];
 	}
@@ -335,20 +372,45 @@ void SceneLoader::loadCameras() {
 	}
 	else if (hasItem(camera, "look at")) {
 		auto& lookAt = camera["look at"];
-		cam.forwardDir = glm::normalize(glm::vec3{ lookAt[0], lookAt[1], lookAt[2] } - cam.position);
+		glm::vec3 lookAtVec{ lookAt[0], lookAt[1], lookAt[2] };
+		//cam.focusDistance = glm::length(lookAtVec - cam.position);
+		cam.forwardDir = glm::normalize(lookAtVec - cam.position);
 	}
 	cam.rightDir = glm::normalize(glm::cross(cam.forwardDir, cam.upDir));
 
-	// multiplying a large number works around the insufficiency of float precision
-	float halfh = tan(cam.fov / 2) * 10000.f;
-	float halfw = halfh * cam.aspect;
-	cam.screenOrigin = cam.forwardDir * 10000.f - cam.rightDir * halfw + cam.upDir * halfh;
-	cam.pixelHeight = halfh * 2.f / scene.config.window.height;
-	cam.pixelWidth = halfw * 2.f / scene.config.window.width;
+	cam.halfH = cam.focusDistance * glm::tan(cam.fov/2.f);
+	cam.halfW = cam.halfH * cam.aspect;
+	cam.pixelHeight = cam.halfH * 2.f / scene.config.window.height;
+	cam.pixelWidth = cam.halfW * 2.f / scene.config.window.width;
+	cam.halfPixelHeight = cam.pixelHeight / 2.f;
+	cam.halfPixelWidth = cam.pixelWidth / 2.f;
+	cam.filmOrigin = cam.position + cam.forwardDir * cam.focusDistance - cam.rightDir * cam.halfW + cam.upDir * cam.halfH;
 
 	scene.cam = cam;
 
 	if (printDetails) std::cout << " done." << std::endl;
+}
+
+std::pair<glm::vec3, glm::vec3> SceneLoader::calcTangent(Triangle& t) {
+	const auto E1 = t.vert1.position - t.vert2.position;
+	const auto E2 = t.vert2.position - t.vert0.position;
+	const auto dUV1 = t.vert1.uv - t.vert0.uv;
+	const auto dUV2 = t.vert2.uv - t.vert0.uv;
+
+	float f = 1.0f / (dUV1.x * dUV2.y - dUV2.x * dUV1.y);
+	glm::vec3 T{
+		f * (dUV2.y * E1.x - dUV1.y * E2.x),
+		f * (dUV2.y * E1.y - dUV1.y * E2.y),
+		f * (dUV2.y * E1.z - dUV1.y * E2.z),
+	};
+	T = glm::normalize(T);
+	glm::vec3 B{
+		f * (-dUV2.x * E1.x + dUV1.x * E2.x),
+		f * (-dUV2.x * E1.y + dUV1.x * E2.y),
+		f * (-dUV2.x * E1.z + dUV1.x * E2.z),
+	};
+	B = glm::normalize(B);
+	return { T, B };
 }
 
 glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const Transform& transform) {
@@ -363,7 +425,7 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 	glm::ivec2 meshTrigIdx;
 	meshTrigIdx.x = scene.trigBuf.size();
 
-	// load mesh
+	// load mesh and calculate tangents
 	// shape.mesh -> face£¨triangle) -> vertex
 	for (auto& shape : shapes) {
 		// num_face_vertices.size(): how many faces does this mesh have
@@ -433,7 +495,39 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 				};
 			}
 
-			scene.trigBuf[trigIdx++] = std::move(trig);
+			scene.trigBuf[trigIdx] = std::move(trig);
+			if (!hasItem(vert2face, trig.vert0)) {
+				vert2face.emplace(trig.vert0, std::vector<int>{});
+			}
+			if (!hasItem(vert2face, trig.vert1)) {
+				vert2face.emplace(trig.vert1, std::vector<int>{});
+			}
+			if (!hasItem(vert2face, trig.vert2)) {
+				vert2face.emplace(trig.vert2, std::vector<int>{});
+			}
+			vert2face[trig.vert0].push_back(trigIdx);
+			vert2face[trig.vert1].push_back(trigIdx);
+			vert2face[trig.vert2].push_back(trigIdx);
+			tangents.emplace(trigIdx, calcTangent(trig));
+			trigIdx++;
+		}
+	}
+	for (auto& pair : vert2face) {
+		auto& vert = pair.first;
+		glm::vec3 T{ 0.f };
+		for (auto i : pair.second) {
+			auto t = tangents[i].first;
+			auto b = tangents[i].second;
+			if (glm::dot(glm::cross(vert.normal, t), b) < 0.0f)
+				t = t * -1.0f;
+			T += t;
+		}
+		T = glm::normalize(T - vert.normal * glm::dot(vert.normal, T));
+		for (auto i : pair.second) {
+			auto& trig = scene.trigBuf[i];
+			if (trig.vert0 == vert) trig.vert0.tangent = T;
+			if (trig.vert1 == vert) trig.vert1.tangent = T;
+			if (trig.vert2 == vert) trig.vert2.tangent = T;
 		}
 	}
 
@@ -446,12 +540,18 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 		vecTransform2(&trig.vert0.position, transform.transformMat);
 		vecTransform2(&trig.vert1.position, transform.transformMat);
 		vecTransform2(&trig.vert2.position, transform.transformMat);
-		vecTransform2(&trig.vert0.normal, transform.transformMat, 0.f);
-		vecTransform2(&trig.vert1.normal, transform.transformMat, 0.f);
-		vecTransform2(&trig.vert2.normal, transform.transformMat, 0.f);
+		vecTransform2(&trig.vert0.normal, transform.normalTransformMat, 0.f);
+		vecTransform2(&trig.vert1.normal, transform.normalTransformMat, 0.f);
+		vecTransform2(&trig.vert2.normal, transform.normalTransformMat, 0.f);
+		vecTransform2(&trig.vert0.tangent, transform.normalTransformMat, 0.f);
+		vecTransform2(&trig.vert1.tangent, transform.normalTransformMat, 0.f);
+		vecTransform2(&trig.vert2.tangent, transform.normalTransformMat, 0.f);
 		trig.vert0.normal = glm::normalize(trig.vert0.normal);
 		trig.vert1.normal = glm::normalize(trig.vert1.normal);
 		trig.vert2.normal = glm::normalize(trig.vert2.normal);
+		trig.vert0.tangent = glm::normalize(trig.vert0.tangent);
+		trig.vert1.tangent = glm::normalize(trig.vert1.tangent);
+		trig.vert2.tangent = glm::normalize(trig.vert2.tangent);
 
 		updateTrigBoundingBox(trig);
 

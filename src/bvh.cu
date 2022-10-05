@@ -38,11 +38,11 @@ void BVH::build() {
 			trigIndices->splice(trigIndices->end(), *initialIndices);
 		}
 		else {
-			int depth = log((double)trigCount) / log(depthBottom);
+			int depth = std::min((int)(log((double)trigCount) / log(depthBottom)), MAX_TREE_DEPTH);
 			obj.treeRoot = buildNode(0, depth, initialIndices, obj.bbox);
 			//obj.treeDepth = depth;
 		}
-		//std::cout << obj.treeRoot <<" "<< trigCount << " " << trigIndices->size() << std::endl;
+		//std::cout << obj.treeRoot <<" "<< trigCount << " " << trigIndices->size() << " "<< log((double)trigCount) / log(depthBottom) << std::endl;
 		auto& node = tree[obj.treeRoot];
 		//std::cout << "    "<< node.size << " " << node.trigIdxStart << std::endl;
 	}
@@ -52,7 +52,7 @@ void BVH::build() {
 
 	int i = 0;
 	for (auto it = trigIndices->begin(); it != trigIndices->end(); it++) {
-		cudaMemcpy(devTreeTrigIdx + i, &(*it), sizeof(int), cudaMemcpyHostToDevice);
+		cudaMemcpy(devTreeTrigIdx + i, &it->first, sizeof(int), cudaMemcpyHostToDevice);
 		i++;
 	}
 	checkCUDAError("cudaMemcpy devTreeTrigIdx failed.");
@@ -109,7 +109,6 @@ int BVH::buildNode(
 		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs7 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
 
 		// find triangles
-
 		for (auto it = trigs->begin(); it != trigs->end(); it++) {
 			Triangle t = scene.trigBuf[it->first];
 			if (tirgBoxIntersect(t, b0)) {

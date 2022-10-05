@@ -35,14 +35,13 @@ __device__ __host__ bool rayBoxIntersect(const Ray& r, const BoundingBox& bbox, 
 }
 
 __device__ __host__ bool rayTrigIntersect(
-	const Ray& r, const Triangle& triangle, float* dist, glm::vec3* normal, glm::vec2* uv) {
+	const Ray& r, const Triangle& triangle, float* dist, glm::vec3* normal, glm::vec3* tangent, glm::vec2* uv) {
 	glm::vec2 baryCoord;
 	if (glm::intersectRayTriangle(
 		r.origin, r.dir, triangle.vert0.position, triangle.vert1.position, triangle.vert2.position, baryCoord, *dist)) {
-		//*normal = baryCoord.x * triangle.vert0.normal + baryCoord.y * triangle.vert1.normal + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.normal;
 		*normal = (1 - baryCoord.x - baryCoord.y) * triangle.vert0.normal + baryCoord.x * triangle.vert1.normal + baryCoord.y * triangle.vert2.normal;
-		//*uv = baryCoord.x * triangle.vert0.uv + baryCoord.y * triangle.vert1.uv + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.uv;
 		*uv = (1 - baryCoord.x - baryCoord.y) * triangle.vert0.uv + baryCoord.x * triangle.vert1.uv + baryCoord.y * triangle.vert2.uv;
+		*tangent = (1 - baryCoord.x - baryCoord.y) * triangle.vert0.tangent + baryCoord.x * triangle.vert1.tangent + baryCoord.y * triangle.vert2.tangent;
 		return true;
 	}
 	return false;

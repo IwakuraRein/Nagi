@@ -7,11 +7,14 @@
 #include "sampler.cuh"
 #include "bsdf.cuh"
 
+#define PDF_EPSILON 0.0001f
+
 namespace nagi {
 
 struct IntersectInfo {
 	glm::vec3 position;
 	glm::vec3 normal;
+	glm::vec3 tangent;
 	glm::vec2 uv;
 	int mtlIdx;
 };
@@ -42,7 +45,8 @@ struct IntersectionComp {
 };
 
 __global__ void kernInitializeFrameBuffer(WindowSize window, float* frame);
-__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter = true);
+__global__ void kernInitializeRays(
+WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam/*, bool jitter = true, bool DOP = true*/);
 // naive bvh
 __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, Triangle* trigBuf, IntersectInfo* out);
 // brute force

@@ -166,8 +166,9 @@ __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStar
 	if (idx >= rayNum) return;
 
 	Ray r = rayPool[idx].ray;
-	glm::vec3 normal, position;
+	glm::vec3 normal, position, tangent;
 	glm::vec3 pickedNormal{ 0.f, 0.f, 0.f };
+	glm::vec3 pickedTangent{ 0.f, 0.f, 0.f };
 	glm::vec2 pickedUV{ 0.f, 0.f };
 	glm::vec2 uv;
 	int pickedMtlIdx{ -1 };
@@ -176,10 +177,11 @@ __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStar
 	for (int i = trigIdxStart; i <= trigIdxEnd; i++) {
 		Triangle trig = trigBuf[i];
 		if (rayBoxIntersect(r, trig.bbox, &dist)) {
-			if (rayTrigIntersect(r, trig, &dist, &normal, &uv)) {
+			if (rayTrigIntersect(r, trig, &dist, &normal, &tangent, &uv)) {
 				if (dist > 0.f && dist < minDist) {
 					minDist = dist;
 					pickedNormal = normal;
+					pickedTangent = tangent;
 					pickedUV = uv;
 					pickedMtlIdx = trig.mtlIdx;
 				}
@@ -189,6 +191,7 @@ __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStar
 	IntersectInfo result;
 	result.mtlIdx = pickedMtlIdx;
 	result.normal = pickedNormal;
+	result.tangent = pickedTangent;
 	result.uv = pickedUV;
 	result.position = r.origin + r.dir * (minDist - 0.001f);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
@@ -200,8 +203,9 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 	if (idx >= rayNum) return;
 
 	Ray r = rayPool[idx].ray;
-	glm::vec3 normal, position;
+	glm::vec3 normal, position, tangent;
 	glm::vec3 pickedNormal{ 0.f, 0.f, 0.f };
+	glm::vec3 pickedTangent{ 0.f, 0.f, 0.f };
 	glm::vec2 pickedUV{ 0.f, 0.f };
 	glm::vec2 uv;
 	int pickedMtlIdx{ -1 };
@@ -214,12 +218,13 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 				for (int j = obj.trigIdxStart; j <= obj.trigIdxEnd; j++) {
 					Triangle trig = trigBuf[j];
 					if (rayBoxIntersect(r, trig.bbox, &dist)) {
-						if (rayTrigIntersect(r, trig, &dist, &normal, &uv)) {
+						if (rayTrigIntersect(r, trig, &dist, &normal, &tangent, &uv)) {
 							if (dist > 0.f && dist < minDist) {
 								minDist = dist;
 								pickedNormal = normal;
 								pickedUV = uv;
 								pickedMtlIdx = trig.mtlIdx;
+								pickedTangent = tangent;
 							}
 						}
 					}
@@ -230,6 +235,7 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 	IntersectInfo result;
 	result.mtlIdx = pickedMtlIdx;
 	result.normal = pickedNormal;
+	result.tangent = pickedTangent;
 	result.uv = pickedUV;
 	result.position = r.origin + r.dir * (minDist - 0.001f);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
@@ -243,9 +249,10 @@ __global__ void kernBVHIntersectTest(
 	if (idx >= rayNum) return;
 
 	Ray r = rayPool[idx].ray;
-	glm::vec3 normal, position;
-	glm::vec3 pickedNormal{ 0.f, 0.f, 0.f };
-	glm::vec2 pickedUV{ 0.f, 0.f };
+	glm::vec3 normal, position, tangent;
+	glm::vec3 pickedNormal{ 0.f };
+	glm::vec3 pickedTangent{ 0.f };
+	glm::vec2 pickedUV{ 0.f };
 	glm::vec2 uv;
 	int pickedMtlIdx{ -1 };
 	float trigDist;
@@ -257,8 +264,8 @@ __global__ void kernBVHIntersectTest(
 	int searchedChildern[MAX_TREE_DEPTH + 1] = { 0 };
 	for (int i = 0; i < objNum; i++) {
 		Object obj = objBuf[i];
-		//if (rayBoxIntersect(r, obj.bbox, &boxD)) {
-			//if (boxD < minTrigD) {
+		if (rayBoxIntersect(r, obj.bbox, &boxD)) {
+			if (boxD < minTrigD) {
 				int ptr = 0;
 				stack[0] = treeBuf[obj.treeRoot]; // root node;
 				while (ptr >= 0) {
@@ -288,12 +295,13 @@ __global__ void kernBVHIntersectTest(
 								//if (trigDist >= minTrigD) {
 								//	if (!boxBoxIntersect(trig.bbox, lastTrigBox)) continue;
 								//}
-								if (rayTrigIntersect(r, trig, &trigDist, &normal, &uv)) {
+								if (rayTrigIntersect(r, trig, &trigDist, &normal, &tangent, &uv)) {
 									if (trigDist > 0.f && trigDist < minTrigD) {
 										minTrigD = trigDist;
 										pickedNormal = normal;
 										pickedUV = uv;
 										pickedMtlIdx = trig.mtlIdx;
+										pickedTangent = tangent;
 										//lastTrigBox = trig.bbox;
 									}
 								}
@@ -303,12 +311,13 @@ __global__ void kernBVHIntersectTest(
 						ptr--;
 					}
 				}
-			//}
-		//}
+			}
+		}
 	}
 	IntersectInfo result;
 	result.mtlIdx = pickedMtlIdx;
 	result.normal = pickedNormal;
+	result.tangent = pickedTangent;
 	result.uv = pickedUV;
 	result.position = r.origin + r.dir * (minTrigD - 0.001f);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
@@ -317,7 +326,7 @@ __global__ void kernBVHIntersectTest(
 
 int PathTracer::intersectionTest(int rayNum) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernTrigIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, 0, scene.trigBuf.size()-1, devTrigBuf, devResults1);
+	//kernTrigIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, 0, scene.trigBuf.size()-1, devTrigBuf, devResults1);
 	//kernObjIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, devTrigBuf, devResults1);
 	kernBVHIntersectTest<<<blocksPerGrid, BLOCK_SIZE>>> (
 		rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, bvh.devTree, bvh.devTreeTrigIdx, devTrigBuf, devResults1);
@@ -350,40 +359,42 @@ __global__ void kernGenerateGbuffer(
 	Path p = rayPool[idx];
 	int pixel = p.pixelIdx;
 	IntersectInfo intersect = intersections[idx];
-	intersect.normal /= currentSpp;
-
 	Material mtl = mtlBuf[intersect.mtlIdx];
+
+	glm::vec3 normal;
+	if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+		glm::mat3 TBN = glm::mat3(intersect.tangent, glm::cross(intersect.normal, intersect.tangent), intersect.normal);
+		float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersect.uv.x, intersect.uv.y);
+		glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, 1.f };
+		bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
+		normal = glm::normalize(TBN * bump);
+	}
+	else normal = intersect.normal;
+
+	//normal = (normal + 1.f) / 2.f;
+
 	glm::vec3 albedo;
 	if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
 		float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersect.uv.x, intersect.uv.y);
 		albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
 	}
 	else albedo = mtl.albedo;
-	albedo /= currentSpp;
 
 	float depth = glm::length(intersect.position - p.ray.origin);
-	depth /= currentSpp;
 
 	// blend the gbuffer is good for denoising. 
 	// reference: https://github.com/tunabrain/tungsten/issues/69
-	normalBuf[pixel * 3] *= (currentSpp - 1.f) / currentSpp;
-	normalBuf[pixel * 3 + 1] *= (currentSpp - 1.f) / currentSpp;
-	normalBuf[pixel * 3 + 2] *= (currentSpp - 1.f) / currentSpp;
-	normalBuf[pixel * 3] += intersect.normal.x;
-	normalBuf[pixel * 3 + 1] += intersect.normal.y;
-	normalBuf[pixel * 3 + 2] += intersect.normal.z;
-	albedoBuf[pixel * 3] *= (currentSpp - 1.f) / currentSpp;
-	albedoBuf[pixel * 3 + 1] *= (currentSpp - 1.f) / currentSpp;
-	albedoBuf[pixel * 3 + 2] *= (currentSpp - 1.f) / currentSpp;
-	albedoBuf[pixel * 3] += albedo.x;
-	albedoBuf[pixel * 3 + 1] += albedo.y;
-	albedoBuf[pixel * 3 + 2] += albedo.z;
-	depthBuf[pixel] *= (currentSpp - 1.f) / currentSpp;
-	depthBuf[pixel] += depth;
+	normalBuf[pixel * 3] = (normalBuf[pixel * 3]*(currentSpp - 1.f) + normal.x) / currentSpp;
+	normalBuf[pixel * 3+1] = (normalBuf[pixel * 3+1]*(currentSpp - 1.f) + normal.y) / currentSpp;
+	normalBuf[pixel * 3+2] = (normalBuf[pixel * 3+2]*(currentSpp - 1.f) + normal.z) / currentSpp;
+	albedoBuf[pixel * 3] = (albedoBuf[pixel * 3]*(currentSpp - 1.f) + albedo.x) / currentSpp;
+	albedoBuf[pixel * 3+1] = (albedoBuf[pixel * 3+1]*(currentSpp - 1.f) + albedo.y) / currentSpp;
+	albedoBuf[pixel * 3+2] = (albedoBuf[pixel * 3+2]*(currentSpp - 1.f) + albedo.z) / currentSpp;
+	depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
 }
 void PathTracer::generateGbuffer(int rayNum, int spp) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernGenerateGbuffer << <blocksPerGrid, BLOCK_SIZE >> > (
+	kernGenerateGbuffer<<<blocksPerGrid, BLOCK_SIZE >> > (
 		rayNum, (float)spp, devRayPool1, devResults1, devMtlBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
 }
 
@@ -401,7 +412,8 @@ __global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* i
 
 
 	if (p.remainingBounces == 0) {
-		p.lastHit = -1;
+		//p.lastHit = -1;
+		p.color = glm::vec3{ 0.f };
 	}
 	else {
 		if (mtl.type == MTL_TYPE_LIGHT_SOURCE) {
@@ -416,25 +428,56 @@ __global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* i
 					p.remainingBounces = 0;
 				}
 				else {
+					glm::vec3 normal;
+					if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+						glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
+						float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y) ;
+						glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
+						bump.z = sqrtf(1.f - glm::clamp(bump.x*bump.x+bump.y*bump.y, 0.f, 1.f));
+						normal = glm::normalize(TBN * bump);
+					}
+					else normal = intersection.normal;
+
+					glm::vec3 albedo;
+					if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+						float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
+						albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
+					}
+					else albedo = mtl.albedo;
+
+					float metallic;
+					if (hasTexture(mtl, TEXTURE_TYPE_METALLIC)) {
+						metallic = tex2D<float>(mtl.metallicTex.devTexture, intersection.uv.x, intersection.uv.y);
+					}
+					else metallic = mtl.metallic;
+
+					float roughness;
+					if (hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS)) {
+						roughness = tex2D<float>(mtl.roughnessTex.devTexture, intersection.uv.x, intersection.uv.y);
+					}
+					else roughness = mtl.roughness;
+
 					float pdf;
 					glm::vec3 wo;
-					if (glm::epsilonEqual(mtl.roughness, 0.f, FLT_EPSILON)) {
-						wo = glm::reflect(p.ray.dir, intersection.normal);
-						pdf = 1.f;
+					thrust::uniform_real_distribution<double> u01(0.f, 1.f);
+					float r = u01(rnd);
+					if (r < 0.5f + metallic / 2.f) {
+						wo = GGXImportanceSampler(roughness, p.ray.dir, normal, &pdf, rnd);
 					}
-					else if (mtl.roughness > 0.9f)
-						wo = cosHemisphereSampler(intersection.normal, &pdf, rnd);
-					else
-						wo = GGXImportanceSampler(mtl.roughness, p.ray.dir, intersection.normal, &pdf, rnd);
-					if (glm::dot(wo, intersection.normal) < 0.f) {
-						p.lastHit = -1;
+					else {
+						wo = cosHemisphereSampler(normal, &pdf, rnd);
+					}
+						
+					if (glm::dot(wo, normal) < 0.f || pdf < PDF_EPSILON) {
+						//p.lastHit = -1;
+						p.color = glm::vec3{ 0.f };
 						p.remainingBounces = 0;
 					}
 					else {
-						glm::vec3 bsdf = microFacetBrdf(p.ray.dir, wo, intersection.uv, intersection.normal, mtl);
-						p.color = p.color * bsdf / (pdf + FLT_EPSILON); // lambert is timed inside the bsdf
+						glm::vec3 bsdf = microFacetBrdf(p.ray.dir, wo, normal, albedo, metallic, roughness);
+						p.color = p.color * bsdf / pdf; // lambert is timed inside the bsdf
 						p.ray.dir = wo;
-						p.ray.invDir = 1.f / (wo + FLT_EPSILON);
+						p.ray.invDir = 1.f / (wo/* + FLT_EPSILON*/);
 					}
 				}
 			}
@@ -494,17 +537,13 @@ int PathTracer::compactRays(int rayNum, Path* rayPool, Path* compactedRayPool) {
 	//return 0;
 }
 
-__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter) {
+__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam/*, bool jitter, bool DOP*/) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= window.pixels) return;
 	float rnd1 = 0.0;
 	float rnd2 = 0.0;
-	if (jitter) {
-		thrust::default_random_engine rng = makeSeededRandomEngine(spp, idx, 0);
-		thrust::uniform_real_distribution<double> u01(-0.5f, 0.5f);
-		rnd1 = u01(rng);
-		rnd2 = u01(rng);
-	}
+	thrust::default_random_engine rng = makeSeededRandomEngine(spp, idx, 0);
+	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 
 	Path path;
 	path.pixelIdx = idx;
@@ -517,11 +556,23 @@ __global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, in
 	//glm::vec3 ndc{ -1.f + px * PIXEL_WIDTH + HALF_PIXEL_WIDTH, -1.f + py * PIXEL_HEIGHT + HALF_PIXEL_HEIGHT, 0.5f };
 	//vecTransform(&ndc, cam.invProjectMat*cam.invViewMat);
 	//glm::vec3 dir = ndc - cam.position;
-	path.ray.dir = cam.screenOrigin
-		- cam.upDir * ((float)py + rnd1) * cam.pixelHeight + cam.halfPixelHeight
-		+ cam.rightDir * ((float)px + rnd2) * cam.pixelWidth + cam.halfPixelWidth;
-	path.ray.dir = glm::normalize(path.ray.dir);
+
+	float theta = TWO_PI * u01(rng);
+	float r = u01(rng) * cam.focusDistance / cam.fNumber * 0.5f;
+
+	rnd1 = u01(rng) - 0.5f;
+	rnd2 = u01(rng) - 0.5f;
+
+	glm::vec3 lookAt = cam.filmOrigin
+		- cam.upDir * (((float)py + rnd1) * cam.pixelHeight + cam.halfPixelHeight)
+		+ cam.rightDir * (((float)px + rnd2) * cam.pixelWidth + cam.halfPixelWidth);
+	glm::vec3 offset = -cam.upDir * r * glm::cos(theta);
+	offset += cam.rightDir * r * glm::sin(theta);
+	glm::vec3 lookFrom = cam.position + offset;
+
+	path.ray.dir = glm::normalize(lookAt - lookFrom);
 	path.ray.invDir = 1.f / path.ray.dir;
+	path.ray.origin = lookFrom;
 	path.lastHit = 1;
 	path.color = glm::vec3{ 1.f, 1.f, 1.f };
 	rayPool[idx] = path;
@@ -543,12 +594,9 @@ __global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* 
 	if (path.lastHit < 0) { // ray didn't hit anything, or didn't hit light source in the end
 		path.color = glm::vec3{ 0.f };
 	}
-	frameBuffer[path.pixelIdx * 3] *= (currentSpp - 1.f) / currentSpp;
-	frameBuffer[path.pixelIdx * 3 + 1] *= (currentSpp - 1.f) / currentSpp;
-	frameBuffer[path.pixelIdx * 3 + 2] *= (currentSpp - 1.f) / currentSpp;
-	frameBuffer[path.pixelIdx * 3] += (path.color.x / currentSpp);
-	frameBuffer[path.pixelIdx * 3 + 1] += (path.color.y / currentSpp);
-	frameBuffer[path.pixelIdx * 3 + 2] += (path.color.z / currentSpp);
+	frameBuffer[path.pixelIdx * 3] = (frameBuffer[path.pixelIdx * 3] * (currentSpp - 1.f) + path.color.x) / currentSpp;
+	frameBuffer[path.pixelIdx * 3+1] = (frameBuffer[path.pixelIdx * 3+1] * (currentSpp - 1.f) + path.color.y) / currentSpp;
+	frameBuffer[path.pixelIdx * 3+2] = (frameBuffer[path.pixelIdx * 3+2] * (currentSpp - 1.f) + path.color.z) / currentSpp;
 }
 
 void PathTracer::writeFrameBuffer(int spp) {
@@ -579,6 +627,9 @@ std::unique_ptr<float[]> PathTracer::getNormalBuffer() {
 	if (devNormalBuf) {
 		std::unique_ptr<float[]> ptr{ new float[window.pixels * 3] };
 		cudaMemcpy(ptr.get(), devNormalBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+		for (int i = 0; i < window.pixels * 3; i++) {
+			ptr[i] = (ptr[i] + 1.f) / 2.f;
+		}
 		return ptr;
 	}
 	else {

@@ -36,17 +36,17 @@ __device__ __host__ glm::vec3 nagi::GGXImportanceSampler(float alpha, const glm:
     float a2 = alpha * alpha;
     float phi = rnd1 * TWO_PI;
     float cosTheta = sqrtf((1 - rnd2) / (rnd2 * (a2 - 1) + 1));
-    float cosTheta2 = cosTheta * cosTheta;
+    float cosTheta2 = glm::clamp(cosTheta * cosTheta, 0.f, 1.f);
     float sinTheta = sqrtf(1 - cosTheta2);
 
     glm::vec3 T = getDifferentDir(normal);
     T = glm::normalize(glm::cross(T, normal));
     glm::vec3 B = glm::normalize(glm::cross(T, normal));
 
-    glm::vec3 h{ T * cosf(phi) * sinTheta + B * sinf(phi) * sinTheta + normal * cosTheta };
+    glm::vec3 h{ T * glm::cos(phi) * sinTheta + B * glm::sin(phi) * sinTheta + normal * cosTheta };
 
     float denom = ((a2 - 1) * cosTheta2 + 1);
-    *pdf = (a2 * cosTheta * sinTheta) * INV_PI / (denom * denom * fabsf(glm::dot(wi, h)) + FLT_EPSILON);
+    *pdf = (a2 * cosTheta * sinTheta) * INV_PI / (denom * denom * fmaxf(glm::dot(-wi, h), 0.f) + FLT_EPSILON);
 
     return glm::normalize(glm::reflect(wi, h));
 }
@@ -60,7 +60,7 @@ __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& normal, floa
     float phi = rnd1 * TWO_PI;
     float r = sqrtf(rnd2);
 
-    glm::vec3 wo_tan{ cosf(phi) * r, sinf(phi) * r, sqrtf(1.0f - rnd2) };
+    glm::vec3 wo_tan{ glm::cos(phi) * r, glm::sin(phi) * r, sqrtf(1.0f - rnd2) };
 
     *pdf = wo_tan.z * INV_PI;
 
@@ -80,7 +80,7 @@ __device__ __host__ glm::vec3 uniformHemisphereSampler(const glm::vec3& normal, 
     float phi = rnd1 * TWO_PI;
     float r = sqrtf(1.0f - rnd2 * rnd2);
 
-    glm::vec3 wo_tan{ cosf(phi) * r, sinf(phi) * r, rnd2 };
+    glm::vec3 wo_tan{ glm::cos(phi) * r, glm::sin(phi) * r, rnd2 };
 
     *pdf = INV_TWO_PI;
 

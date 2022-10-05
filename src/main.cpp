@@ -19,6 +19,7 @@ int main(int argc, char* argv[]) {
 	try {
 
 		std::unique_ptr<SceneLoader> sceneLoader = std::make_unique<SceneLoader>(scene, argv[1]);
+		sceneLoader->printDetails = true;
 		sceneLoader->load();
 		std::unique_ptr<BVH> bvh = std::make_unique<BVH>(scene);
 		bvh->build();
@@ -39,6 +40,10 @@ int main(int argc, char* argv[]) {
 
 		//auto normal = pathTracer->getNormalBuffer();
 		//saveHDR(scene.config.window, normal.get(), 3, "./normal_");
+		auto albedo = pathTracer->getAlbedoBuffer();
+		saveHDR(scene.config.window, albedo.get(), 3, "./albedo_");
+		//auto depth = pathTracer->getDepthBuffer();
+		//saveHDR(scene.config.window, depth.get(), 1, "./depth_");
 
 		pathTracer.reset(nullptr);
 		bvh.reset(nullptr);

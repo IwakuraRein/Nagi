@@ -48,11 +48,14 @@
 
 #define TEXTURE_TYPE_BASE 0
 #define TEXTURE_TYPE_ROUGHNESS 1
-#define TEXTURE_TYPE_METALNESS 2
+#define TEXTURE_TYPE_METALLIC 2
 #define TEXTURE_TYPE_NORMAL 3
 #define TEXTURE_TYPE_OCCLUSION 4
 
 #define BLOCK_SIZE 128
+
+#define HALF_FRAME_HEIGHT 100.f
+#define FOCAL_MULTIPLIER 1000.f // use a large number to work around float's precision problem
 
 // CUDA 11.3 has added device code support for new C++ keywords: `constexpr` and `auto`.
 // In CUDA C++, `__device__` and `__constant__` variables can now be declared `constexpr`.
@@ -122,12 +125,20 @@ inline __host__ __device__ unsigned int hash(unsigned int a) {
 	return a;
 };
 
+inline void hashCombine(std::size_t& seed) { }
+
 template <typename T, typename... Rest>
 inline void hashCombine(std::size_t& seed, const T& v, Rest... rest) {
 	std::hash<T> hasher;
 	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 	hashCombine(seed, rest...);
 }
+//template <class T>
+//inline void hashCombine(std::size_t& seed, const T& v)
+//{
+//	std::hash<T> hasher;
+//	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+//}
 
 bool doesFileExist(const std::string& name);
 
@@ -154,6 +165,8 @@ struct Transform {
 	glm::vec3 scale{ 1.f, 1.f, 1.f };
 	glm::mat4 transformMat;
 	glm::mat4 invTransformMat;
+	glm::mat4 normalTransformMat;
+	glm::mat4 invNormalTransformMat;
 };
 
 __device__ __host__ glm::mat4 getTransformMat(
@@ -166,15 +179,17 @@ __device__ __host__ void vecTransform2(glm::vec3* vec, const glm::mat4& mat, flo
 struct Camera {
 	float near{ 0.01f };
 	float far{ 1000.f };
-	float fov{ 1.04719755f };
+	float fov{ 1.f };
 	float aspect{ 1.77777777777778f };
+	float focusDistance{ 1.f };
+	float fNumber{ 1000000.f };
 	glm::vec3 position{ 0.f, 0.f, 0.f };
 	glm::vec3 upDir{ 0.f, -1.f, 0.f };
 	glm::vec3 rightDir{ 1.f, 0.f, 0.f };
 	glm::vec3 forwardDir{ 0.f, 0.f, 1.f };
 
-	// float's precision is not enough for computing ndc
-	glm::vec3 screenOrigin;
+	glm::vec3 filmOrigin;
+	float halfW, halfH;
 	float pixelWidth, pixelHeight, halfPixelWidth, halfPixelHeight;
 };
 
@@ -200,7 +215,39 @@ inline __device__ __host__ void updateBoundingBox(const glm::vec3& min, const gl
 struct Vertex {
 	glm::vec3 position;
 	glm::vec3 normal;
+	glm::vec3 tangent;
 	glm::vec2 uv;
+	bool operator==(const Vertex& other) const { // don't compare tangent
+		return position == other.position && normal == other.normal && uv == other.uv;
+	}
+	size_t hash() const {
+		size_t seed = 0;
+		//hashCombine(seed, position.x);
+		//hashCombine(seed, position.y);
+		//hashCombine(seed, position.z);
+		//hashCombine(seed, normal.x);
+		//hashCombine(seed, normal.y);
+		//hashCombine(seed, normal.z);
+		//hashCombine(seed, tangent.x);
+		//hashCombine(seed, tangent.y);
+		//hashCombine(seed, tangent.z);
+		//hashCombine(seed, uv.x);
+		//hashCombine(seed, uv.y);
+		hashCombine(
+			seed,
+			position.x,
+			position.y,
+			position.z,
+			normal.x,
+			normal.y,
+			normal.z,
+			tangent.x,
+			tangent.y,
+			tangent.z,
+			uv.x,
+			uv.y);
+		return seed;
+	}
 };
 
 struct Triangle {
@@ -259,7 +306,7 @@ struct Material {
 inline __device__ __host__ bool hasTexture(const Material& mtl, unsigned int type) {
 	return (mtl.textures & (1 << type)) != 0;
 }
-inline __device__ __host__ void addTexture(Material& mtl, unsigned int type) {
+inline __device__ __host__ void addTextureType(Material& mtl, unsigned int type) {
 	mtl.textures = (mtl.textures | (1 << type));
 }
 
@@ -293,6 +340,15 @@ struct Scene {
 };
 extern Scene scene; // global variable
 
+}
+
+namespace std {
+template <>
+struct hash<nagi::Vertex> {
+	size_t operator()(nagi::Vertex const& vertex) const {
+		return vertex.hash();
+	}
+};
 }
 
 #endif // !COMMON_CUH
