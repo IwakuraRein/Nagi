@@ -1,6 +1,6 @@
 # Nagi
 
-![](./doc/depth_of_field.png)
+![](./doc/header.png)
 
 Nagi is a simple path tracer built in CUDA.
 
