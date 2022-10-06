@@ -325,7 +325,6 @@ struct Configuration {
 
 struct Scene {
 	Configuration config;
-
 	Camera cam;
 
 	BoundingBox bbox;
@@ -333,7 +332,11 @@ struct Scene {
 	std::vector<Object> objBuf;
 	std::vector<Material> mtlBuf;
 	std::vector<Triangle> trigBuf;
+	unsigned int mtlTypes;
 };
+inline __device__ __host__ bool hasMaterial(const Scene& scene, unsigned int type) {
+	return (scene.mtlTypes & (1 << type)) != 0;
+}
 extern Scene scene; // global variable
 
 }

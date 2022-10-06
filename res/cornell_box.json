@@ -2,14 +2,14 @@
     "graphics": {
 		"resolution": [1024, 1024],
         "sample rate": 64,
-        "max bounce": 64,
-		"denoiser": 2,
+        "max bounce": 16,
+		"denoiser": 1,
         "alpha": 1.0,
         "gamma": 1.0
     },
     "materials": {
         "LeftWall": {
-            "type": "Opaque",
+            "type": "Lambert",
             "albedo": [
                 0.63,
                 0.065,
@@ -17,7 +17,7 @@
             ]
         },
         "RightWall": {
-            "type": "Opaque",
+            "type": "Lambert",
             "albedo": [
                 0.14,
                 0.45,
@@ -27,12 +27,12 @@
 			"metallic":1
         },
         "Floor": {
-            "type": "Opaque",
+            "type": "Lambert",
 			"roughness": 0.3,
             "base texture": "WoodFloor.jpg"
         },
         "Ceiling": {
-            "type": "Opaque",
+            "type": "Lambert",
             "albedo": [
                 0.725,
                 0.71,
@@ -40,11 +40,11 @@
             ]
         },
         "BackWall": {
-            "type": "Opaque",
+            "type": "Lambert",
             "base texture": "backwall.png"
         },
         "ShortBox": {
-            "type": "Opaque",
+            "type": "Lambert",
             "albedo": [
                 0.725,
                 0.71,
@@ -52,19 +52,19 @@
             ]
         },
         "brass": {
-            "type": "Opaque",
+            "type": "Lambert",
 			"metalic": 1.0,
 			"roughness": 0.15,
 			"base texture": "Brass_Albedo.png"
         },
         "china": {
-            "type": "Opaque",
+            "type": "Lambert",
 			"metalic": 0.0,
 			"roughness": 0.3,
 			"alabedo":[1,1,1]
         },
         "TallBox": {
-            "type": "Opaque",
+            "type": "Lambert",
             "albedo": [
                 0.725,
                 0.71,

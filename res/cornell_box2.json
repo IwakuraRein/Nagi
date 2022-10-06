@@ -1,8 +1,8 @@
 {
     "graphics": {
 		"resolution": [1024, 1024],
-        "sample rate": 8,
-        "max bounce": 8,
+        "sample rate": 512,
+        "max bounce": 16,
 		"denoiser": 2,
         "alpha": 1.0,
         "gamma": 1.0
@@ -66,10 +66,6 @@
         "mirror": {
             "type":  "Mirror"
         },
-		"glass":{
-			"type": "Glass",
-			"ior":1.5
-		},
         "TallBox": {
             "type":  "Microfacet",
             "albedo": [

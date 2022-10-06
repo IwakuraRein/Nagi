@@ -65,6 +65,68 @@ __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& normal, floa
     return glm::normalize(T * wo_tan.x + B * wo_tan.y + normal * wo_tan.z);
 }
 
+__device__ __host__ glm::vec3 refractionSampler(float iorI, float iorT, const glm::vec3& wi, const glm::vec3& n, float* F) {
+    glm::vec3 ni, nt;
+    if (glm::dot(wi, n) > 0.f) {
+        ni = -n;
+        nt = n;
+    }
+    else {
+        ni = n;
+        nt = -n;
+    }
+    glm::vec3 wt = glm::refract(wi, ni, iorI / iorT);
+    float cosi = glm::dot(wi, ni);
+    float cost = glm::dot(wt, nt);
+    float ti = iorT * cosi;
+    float it = iorI * cost;
+    float tt = iorT * cost;
+    float ii = iorI * cosi;
+    float r1 = (ti - it) / (ti + it);
+    float r2 = (ii - tt) / (ii + tt);
+    *F = 0.5f * (r1 * r1 + r2 * r2);
+    return wt;
+}
+
+__device__ __host__ glm::vec3 refractionSampler(float ior, const glm::vec3& wi, const glm::vec3& n, float* F, bool* in) {
+    glm::vec3 ni, nt, wt;
+    float r1, r2;
+    if (glm::dot(wi, n) >= 0.f) { // getting out
+        *in = false;
+        ni = -n;
+        nt = n;
+
+        wt = glm::refract(wi, ni, ior);
+        wt = wi;
+        float cosi = glm::dot(wi, ni);
+        float cost = glm::dot(wt, nt);
+        float ti = cosi;
+        float it = ior * cost;
+        float tt = cost;
+        float ii = ior * cosi;
+        r1 = (ti - it) / (ti + it);
+        r2 = (ii - tt) / (ii + tt);
+    }
+    else { // coming in
+        *in = true;
+        ni = n;
+        nt = -n;
+
+        wt = glm::refract(wi, ni, 1.f / ior);
+        wt = wi;
+        float cosi = glm::dot(wi, ni);
+        float cost = glm::dot(wt, nt);
+        float ti = ior * cosi;
+        float it = cost;
+        float tt = ior * cost;
+        float ii = cosi;
+        r1 = (ti - it) / (ti + it);
+        r2 = (ii - tt) / (ii + tt);
+    }
+    *F = 0.5f * (r1 * r1 + r2 * r2);
+    return wt;
+}
+
 __device__ __host__ glm::vec3 uniformHemisphereSampler(const glm::vec3& normal, float* pdf, float rnd1, float rnd2) {
     float phi = rnd1 * TWO_PI;
     float r = sqrtf(1.0f - rnd2 * rnd2);

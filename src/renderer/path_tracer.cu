@@ -120,11 +120,11 @@ PathTracer::~PathTracer() {
 
 // intersection test -> compact rays -> sort rays according to material -> compute color -> compact rays -> intersection test...
 void PathTracer::iterate() {
-	//std::chrono::steady_clock::time_point timer1, timer2;
+	std::chrono::steady_clock::time_point timer1, timer2;
 	//timer1 = std::chrono::high_resolution_clock::now();
 	//for (int spp = 1; spp <= scene.config.spp; spp++) {
 		std::cout << "  Begin iteration " << spp << ". " << scene.config.spp - spp << " remaining." << std::endl;
-		//if (printDetails) timer2 = std::chrono::high_resolution_clock::now();
+		if (printDetails) timer2 = std::chrono::high_resolution_clock::now();
 		dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
 		kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>> (window, spp, devRayPool1, scene.config.maxBounce, scene.cam);
 		checkCUDAError("kernInitializeRays failed.");
@@ -149,12 +149,12 @@ void PathTracer::iterate() {
 		}
 		writeFrameBuffer(spp);
 		terminatedRayNum = 0;
-		spp++;
 		//if (printDetails) {
-		//	float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer2).count();
-		//	std::cout << "  Iteration " << spp << " finished. Time cost: " << runningTime <<
-		//		" seconds. Time Remaining: " << runningTime * (scene.config.spp - spp) << " seconds." << std::endl;
+			float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer2).count();
+			std::cout << "  Iteration " << spp << " finished. Time cost: " << runningTime <<
+				" seconds. Time Remaining: " << runningTime * (scene.config.spp - spp) << " seconds." << std::endl;
 		//}
+		spp++;
 	//}
 	//float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer1).count();
 	//std::cout << "Ray tracing finished. Time cost: " << runningTime << " seconds." << std::endl;
@@ -399,133 +399,266 @@ void PathTracer::generateGbuffer(int rayNum, int spp) {
 
 
 // compute color and generate new ray direction
-__global__ void kernShading(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+__global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
-	Path p = rayPool[idx];
 	IntersectInfo intersection = intersections[idx];
 	Material mtl = mtlBuf[intersection.mtlIdx];
+	if (mtl.type != MTL_TYPE_LAMBERT) return;
 
+	Path p = rayPool[idx];
 	p.ray.origin = intersection.position;
 
-
 	if (p.remainingBounces == 0) {
-		//p.lastHit = -1;
 		p.color = glm::vec3{ 0.f };
 	}
+	else if (glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
+		p.color = glm::vec3{ 0.f };
+		p.remainingBounces = 0;
+	}
 	else {
-		if (mtl.type == MTL_TYPE_LIGHT_SOURCE) {
-			p.color = p.color * mtl.albedo;
+		auto rnd = makeSeededRandomEngine(spp, idx, 0);
+		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
+		float samplingRnd1 = u01(rnd);
+		float samplingRnd2 = u01(rnd);
+		glm::vec3 normal, albedo;
+		glm::vec3 wo, bsdf;
+		float pdf;
+		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
+			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
+			glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
+			bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
+			normal = glm::normalize(TBN * bump);
+		}
+		else normal = intersection.normal;
+		if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+			float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
+			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
+		}
+		else albedo = mtl.albedo;
+		wo = cosHemisphereSampler(normal, &pdf, samplingRnd1, samplingRnd2);
+		if (pdf < PDF_EPSILON) {
+			//p.lastHit = -1;
+			p.color = glm::vec3{ 0.f };
 			p.remainingBounces = 0;
 		}
 		else {
-			auto rnd = makeSeededRandomEngine(spp, idx, 0);
-			thrust::uniform_real_distribution<double> u01(0.f, 1.f);
-			float samplingRnd1 = u01(rnd);
-			float samplingRnd2 = u01(rnd);
-			glm::vec3 normal, albedo;
-			glm::vec3 wo, bsdf;
-			float pdf;
-			if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
-				glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
-				float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
-				glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
-				bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
-				normal = glm::normalize(TBN * bump);
-			}
-			else normal = intersection.normal;
-			if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
-				float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
-				albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
-			}
-			else albedo = mtl.albedo;
-
-			if (mtl.type == MTL_TYPE_GLASS) {
-				bsdf = albedo;
-				float eta; // ior of source / ior of destination
-				float cosine = glm::dot(normal, p.ray.dir);
-				if (cosine >= 0.f) { // getting out
-					eta = mtl.ior;
-					wo = glm::refract(p.ray.dir, -normal, eta);
-				}
-				else { // coming in
-					eta = 1.f / mtl.ior;
-					float r = u01(rnd);
-					if (r > -cosine) {
-						wo = glm::refract(p.ray.dir, normal, eta);
-						pdf = 1.f / (1 + cosine);
-					}
-					else {
-						wo = glm::reflect(p.ray.dir, normal);
-						pdf = 1.f / -cosine;
-					}
-				}
-			}
-
-			else if (glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
-				p.color = glm::vec3{ 0.f };
-				p.remainingBounces = 0;
-			}
-			else {
-				if (mtl.type == MTL_TYPE_MIRROR) {
-					bsdf = albedo;
-					wo = glm::reflect(p.ray.dir, normal);
-					pdf = 1;
-				}
-				else if (mtl.type == MTL_TYPE_LAMBERT) {
-					wo = cosHemisphereSampler(normal, &pdf, samplingRnd1, samplingRnd2);
-					if (glm::dot(wo, normal) <= 0.001f || pdf < PDF_EPSILON) {
-						//p.lastHit = -1;
-						p.color = glm::vec3{ 0.f };
-						p.remainingBounces = 0;
-					}
-					else bsdf = lambertBrdf(p.ray.dir, wo, normal, albedo);
-				}
-				else if (mtl.type == MTL_TYPE_MICROFACET) {
-					float metallic, roughness;
-					if (hasTexture(mtl, TEXTURE_TYPE_METALLIC)) {
-						metallic = tex2D<float>(mtl.metallicTex.devTexture, intersection.uv.x, intersection.uv.y);
-					}
-					else metallic = mtl.metallic;
-					if (hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS)) {
-						roughness = tex2D<float>(mtl.roughnessTex.devTexture, intersection.uv.x, intersection.uv.y);
-					}
-					else roughness = mtl.roughness;
-
-					float r = u01(rnd);
-					float s = 0.5f + metallic / 2.f;
-					float pdf2;
-					wo = ggxImportanceSampler(roughness, p.ray.dir, normal, &pdf, samplingRnd1, samplingRnd2);
-					glm::vec3 wo2 = cosHemisphereSampler(normal, &pdf2, samplingRnd1, samplingRnd2);
-					if (r > s) wo = wo2;
-					pdf = s * pdf + (1.f - s) * pdf2;
-
-					if (glm::dot(wo, normal) <= 0.001f || pdf < PDF_EPSILON) {
-						//p.lastHit = -1;
-						p.color = glm::vec3{ 0.f };
-						p.remainingBounces = 0;
-					}
-					else {
-						bsdf = microFacetBrdf(p.ray.dir, wo, normal, albedo, metallic, roughness);
-					}
-				}
-
-
-			}
-
+			bsdf = lambertBrdf(p.ray.dir, wo, normal, albedo);
 			p.color = p.color * bsdf / pdf; // lambert is timed inside the bsdf
 			p.ray.dir = wo;
 			p.ray.invDir = 1.f / wo;
 		}
+		p.remainingBounces--;
 	}
-	p.remainingBounces--;
+	rayPool[idx] = p;
+}
+__global__ void kernShadeMirror(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (idx >= rayNum) return;
+
+	IntersectInfo intersection = intersections[idx];
+	Material mtl = mtlBuf[intersection.mtlIdx];
+	if (mtl.type != MTL_TYPE_MIRROR) return;
+
+	Path p = rayPool[idx];
+	p.ray.origin = intersection.position;
+
+	if (p.remainingBounces == 0) {
+		p.color = glm::vec3{ 0.f };
+	}
+	else if (glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
+		p.color = glm::vec3{ 0.f };
+		p.remainingBounces = 0;
+	}
+	else {
+		glm::vec3 normal, albedo;
+		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
+			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
+			glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
+			bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
+			normal = glm::normalize(TBN * bump);
+		}
+		else normal = intersection.normal;
+		if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+			float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
+			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
+		}
+		else albedo = mtl.albedo;
+		p.color = p.color * albedo; // lambert is timed inside the bsdf
+		p.ray.dir = glm::reflect(p.ray.dir, normal);
+		p.ray.invDir = 1.f / p.ray.dir;
+
+		p.remainingBounces--;
+	}
+	rayPool[idx] = p;
+}
+__global__ void kernShadeLightSource(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (idx >= rayNum) return;
+
+	IntersectInfo intersection = intersections[idx];
+	Material mtl = mtlBuf[intersection.mtlIdx];
+	if (mtl.type != MTL_TYPE_LIGHT_SOURCE) return;
+
+	Path p = rayPool[idx];
+	p.ray.origin = intersection.position;
+
+	p.remainingBounces = 0;
+	if (glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
+		p.color = glm::vec3{ 0.f };
+	}
+	else {
+		p.color *= mtl.albedo;
+	}
+	rayPool[idx] = p;
+}
+__global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (idx >= rayNum) return;
+
+	IntersectInfo intersection = intersections[idx];
+	Material mtl = mtlBuf[intersection.mtlIdx];
+	if (mtl.type != MTL_TYPE_GLASS) return;
+
+	Path p = rayPool[idx];
+	p.ray.origin = intersection.position;
+
+	if (p.remainingBounces == 0) {
+		p.color = glm::vec3{ 0.f };
+	}
+	else {
+		auto rnd = makeSeededRandomEngine(spp, idx, 0);
+		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
+		glm::vec3 normal, albedo;
+		glm::vec3 wo, bsdf;
+		float f;
+		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
+			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
+			glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
+			bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
+			normal = glm::normalize(TBN * bump);
+		}
+		else normal = intersection.normal;
+		if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+			float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
+			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
+		}
+		else albedo = mtl.albedo;
+
+		bool in;
+		float r = u01(rnd);
+		wo = refractionSampler(mtl.ior, p.ray.dir, normal, &f, &in);
+		if (r < f) {
+			if (!in) normal = -normal;
+			wo = glm::reflect(p.ray.dir, normal);
+			bsdf = albedo * f;
+		}
+		else {
+			bsdf = albedo * (1.f - f);
+		}
+		p.color = p.color * bsdf; // lambert is timed inside the bsdf
+		p.ray.dir = wo;
+		p.ray.invDir = 1.f / wo;
+
+		p.remainingBounces--;
+	}
+	rayPool[idx] = p;
+}
+__global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (idx >= rayNum) return;
+
+	IntersectInfo intersection = intersections[idx];
+	Material mtl = mtlBuf[intersection.mtlIdx];
+	if (mtl.type != MTL_TYPE_MICROFACET) return;
+
+	Path p = rayPool[idx];
+	p.ray.origin = intersection.position;
+
+
+	if (p.remainingBounces == 0) {
+		p.color = glm::vec3{ 0.f };
+	}
+	else if (glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
+		p.color = glm::vec3{ 0.f };
+		p.remainingBounces = 0;
+	}
+	else {
+		auto rnd = makeSeededRandomEngine(spp, idx, 0);
+		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
+		float samplingRnd1 = u01(rnd);
+		float samplingRnd2 = u01(rnd);
+		glm::vec3 normal, albedo;
+		glm::vec3 wo, bsdf;
+		float pdf;
+		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
+			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
+			glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
+			bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
+			normal = glm::normalize(TBN * bump);
+		}
+		else normal = intersection.normal;
+		if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+			float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
+			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
+		}
+		else albedo = mtl.albedo;
+		float metallic, roughness;
+		if (hasTexture(mtl, TEXTURE_TYPE_METALLIC)) {
+			metallic = tex2D<float>(mtl.metallicTex.devTexture, intersection.uv.x, intersection.uv.y);
+		}
+		else metallic = mtl.metallic;
+		if (hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS)) {
+			roughness = tex2D<float>(mtl.roughnessTex.devTexture, intersection.uv.x, intersection.uv.y);
+		}
+		else roughness = mtl.roughness;
+
+		float r = u01(rnd);
+		float s = 0.5f + metallic / 2.f;
+		float pdf2;
+		wo = ggxImportanceSampler(roughness, p.ray.dir, normal, &pdf, samplingRnd1, samplingRnd2);
+		glm::vec3 wo2 = cosHemisphereSampler(normal, &pdf2, samplingRnd1, samplingRnd2);
+		if (r > s) wo = wo2;
+		pdf = s * pdf + (1.f - s) * pdf2;
+
+		if (glm::dot(wo, normal) <= 0.001f || pdf < PDF_EPSILON) {
+			p.color = glm::vec3{ 0.f };
+			p.remainingBounces = 0;
+		}
+		else {
+			bsdf = microFacetBrdf(p.ray.dir, wo, normal, albedo, metallic, roughness);
+			p.color = p.color * bsdf / pdf; // lambert is timed inside the bsdf
+			p.ray.dir = wo;
+			p.ray.invDir = 1.f / wo;
+		}
+
+		p.remainingBounces--;
+	}
 	rayPool[idx] = p;
 }
 
 int PathTracer::shade(int rayNum, int spp) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernShading<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+	if (hasMaterial(scene, MTL_TYPE_LIGHT_SOURCE))
+		kernShadeLightSource<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+
+	if (hasMaterial(scene, MTL_TYPE_LAMBERT))
+		kernShadeLambert<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+
+	if (hasMaterial(scene, MTL_TYPE_MIRROR))
+		kernShadeMirror<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+
+	if (hasMaterial(scene, MTL_TYPE_GLASS))
+		kernShadeGlass<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+
+	if (hasMaterial(scene, MTL_TYPE_MICROFACET))
+		kernShadeMicrofacet<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+
 	checkCUDAError("kernShading failed.");
 
 	rayNum = compactRays(rayNum, devRayPool1, devRayPool2);
