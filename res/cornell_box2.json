@@ -1,15 +1,15 @@
 {
     "graphics": {
 		"resolution": [1024, 1024],
-        "sample rate": 4,
-        "max bounce": 64,
+        "sample rate": 8,
+        "max bounce": 8,
 		"denoiser": 2,
         "alpha": 1.0,
         "gamma": 1.0
     },
     "materials": {
         "LeftWall": {
-            "type": "Opaque",
+            "type":  "Lambert",
             "albedo": [
                 0.63,
                 0.065,
@@ -17,7 +17,7 @@
             ]
         },
         "RightWall": {
-            "type": "Opaque",
+            "type":  "Lambert",
             "albedo": [
                 0.14,
                 0.45,
@@ -25,22 +25,20 @@
             ]
         },
         "rust": {
-            "type": "Opaque",
+            "type":  "Microfacet",
             "base texture": "rusted_iron_albedo.png",
 			"metallic texture": "rusted_iron_metallic.png",
 			"roughness texture": "rusted_iron_roughness.png",
 			"normal texture": "rusted_iron_normal.png"
         },
         "Floor": {
-            "type": "Opaque",
-            "albedo": [
-                0.725,
-                0.71,
-                0.68
-            ]
+            "type":  "Microfacet",
+            "base texture": "WoodFloor.jpg",
+			"metallic":0,
+			"roughness":0.2
         },
         "Ceiling": {
-            "type": "Opaque",
+            "type":  "Lambert",
             "albedo": [
                 0.725,
                 0.71,
@@ -48,11 +46,11 @@
             ]
         },
         "BackWall": {
-            "type": "Opaque",
+            "type":  "Lambert",
             "base texture": "backwall2.png"
         },
         "ShortBox": {
-            "type": "Opaque",
+            "type":  "Lambert",
             "albedo": [
                 0.725,
                 0.71,
@@ -60,19 +58,20 @@
             ]
         },
         "brass": {
-            "type": "Opaque",
-			"metallic": 1.0,
+            "type":  "Microfacet",
+			"metallic": 0.98,
 			"roughness": 0.15,
 			"base texture": "Brass_Albedo.png"
         },
         "mirror": {
-            "type": "Opaque",
-			"metallic": 1.0,
-			"roughness": 0.0,
-			"albedo":[1,1,1]
+            "type":  "Mirror"
         },
+		"glass":{
+			"type": "Glass",
+			"ior":1.5
+		},
         "TallBox": {
-            "type": "Opaque",
+            "type":  "Microfacet",
             "albedo": [
                 0.725,
                 0.71,
@@ -117,6 +116,23 @@
             ],
             "mesh": "quad",
             "material": "Floor"
+        },
+        "ShortBox": {
+            "position": [
+			-0.3,
+               0.3, -0.2
+            ],
+            "scale": [
+                0.594811,
+                0.604394,
+                0.6
+            ],
+            "rotation": [
+                90,
+                120, -163.36
+            ],
+            "mesh": "cube",
+            "material": "rust"
         },
         "Ceiling": {
             "position": [
@@ -174,33 +190,16 @@
             "mesh": "quad",
             "material": "LeftWall"
         },
-        "ShortBox": {
-            "position": [
-			-0.4,
-               0.3, -0.2
-            ],
-            "scale": [
-                0.594811,
-                0.604394,
-                0.6
-            ],
-            "rotation": [
-                90,
-                120, -163.36
-            ],
-            "mesh": "cube",
-            "material": "rust"
-        },
 		"vase": {
             "position": [
-                0.328631,
+                0.42,
                 0,
-                0.374592
+                0.25
             ],
             "scale": [
-                3,
-                3,
-                3
+                2.8,
+                3.5,
+                2.8
             ],
             "rotation": [
                 180,
@@ -212,7 +211,7 @@
         },	
 		"mirror": {
             "position": [
-			-0.65,
+			-0.67,
 			0.26,
 			0.5],
             "scale": [

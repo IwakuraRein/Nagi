@@ -1,0 +1,77 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{02e3c89e-6ae0-4e1e-9149-30430551fabb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header">
+      <UniqueIdentifier>{fcfc73cc-492e-4970-8fa2-e7dd82e39036}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\renderer\bsdf.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\renderer\bvh.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\renderer\common.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\renderer\denoiser.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\renderer\intersection.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\renderer\io.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\renderer\path_tracer.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\renderer\sampler.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\renderer\scene_loader.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\renderer\instantiate.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\renderer\main.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="src\renderer\bsdf.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\bvh.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\common.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\denoiser.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\intersection.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\io.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\path_tracer.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\sampler.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\scene_loader.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+  </ItemGroup>
+</Project>
