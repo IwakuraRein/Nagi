@@ -1,7 +1,7 @@
 {
     "graphics": {
 		"resolution": [1024, 1024],
-        "sample rate": 512,
+        "sample rate": 1024,
         "max bounce": 16,
 		"denoiser": 2,
         "gamma": 2.2
