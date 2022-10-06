@@ -53,6 +53,14 @@ bool savePNG(const WindowSize& window, const unsigned char* buffer, const int ch
 	return true;
 }
 
+bool savePNG(const WindowSize& window, const float* buffer, const int channels, const float gamma, const std::string& filePath, bool timestamp) {
+	std::unique_ptr<unsigned char[]> buf{ new unsigned char[window.pixels * channels] };
+	for (int i = 0; i < scene.config.window.pixels * channels; i++) {
+		buf[i] = glm::clamp((int)(powf(buffer[i], 1.f / gamma) * 255.f), 0, 255);
+	}
+	return savePNG(window, buf.get(), channels, filePath, timestamp);
+}
+
 bool saveHDR(const WindowSize& window, const float* buffer, const int channels, const std::string& filePath, bool timestamp) {
 	time_t t = time(0);
 	char timeStamp[32] = { NULL };

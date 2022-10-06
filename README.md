@@ -11,11 +11,11 @@ Nagi is a simple path tracer built in CUDA.
 - [x] Mesh Loading
 - [x] Texture Mapping
 - [x] Denoiser
-- [x] BVH
+- [x] Oct-tree Structure
+- [x] Refrection
 
 **Working On**
 
-- [ ] Refrection
 - [ ] Skybox
 - [ ] Preview Window
 

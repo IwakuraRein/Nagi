@@ -3,9 +3,8 @@
 		"resolution": [1024, 1024],
         "sample rate": 64,
         "max bounce": 16,
-		"denoiser": 1,
-        "alpha": 1.0,
-        "gamma": 1.0
+		"denoiser": 2,
+        "gamma": 2.2
     },
     "materials": {
         "LeftWall": {

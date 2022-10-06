@@ -192,8 +192,8 @@ __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStar
 	result.normal = pickedNormal;
 	result.tangent = pickedTangent;
 	result.uv = pickedUV;
-	result.position = r.origin + r.dir * (minDist - 0.001f);
-	//r.origin = r.origin + r.dir * (minDist - 0.001f);
+	//result.position = r.origin + r.dir * (minDist - 0.001f);
+	r.origin = r.origin + r.dir * (minDist - 0.001f);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
 	out[idx] = result;
 }
@@ -373,8 +373,6 @@ __global__ void kernGenerateGbuffer(
 	}
 	else normal = intersect.normal;
 
-	//normal = (normal + 1.f) / 2.f;
-
 	glm::vec3 albedo;
 	if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
 		float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersect.uv.x, intersect.uv.y);
@@ -382,7 +380,7 @@ __global__ void kernGenerateGbuffer(
 	}
 	else albedo = mtl.albedo;
 
-	float depth = glm::length(p.ray.origin - camPos);
+	float depth = glm::length(intersect.position - camPos);
 
 	// blend the gbuffer is good for denoising. 
 	// reference: https://github.com/tunabrain/tungsten/issues/69
@@ -797,9 +795,6 @@ std::unique_ptr<float[]> PathTracer::getNormalBuffer() {
 	if (devNormalBuf) {
 		std::unique_ptr<float[]> ptr{ new float[window.pixels * 3] };
 		cudaMemcpy(ptr.get(), devNormalBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost);
-		for (int i = 0; i < window.pixels * 3; i++) {
-			ptr[i] = (ptr[i] + 1.f) / 2.f;
-		}
 		return ptr;
 	}
 	else {

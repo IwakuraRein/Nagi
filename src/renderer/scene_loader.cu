@@ -104,8 +104,6 @@ void SceneLoader::loadConfig() {
 			config.window.invWidth = 1.f / (float)config.window.width;
 			config.window.invHeight = 1.f / (float)config.window.height;
 		}
-		if (item.key() == "alpha")
-			config.alpha = item.value();
 		if (item.key() == "gamma")
 			config.gamma = item.value();
 		if (item.key() == "sample rate")

@@ -18,6 +18,12 @@ int main(int argc, char* argv[]) {
 		std::cerr << "Error: Must specify a scene file." << std::endl;
 		return EXIT_FAILURE;
 	}
+	std::string saveDir = ".";
+	if (argc >= 3) {
+		saveDir = argv[3];
+		strRightStrip(saveDir, "/");
+		strRightStrip(saveDir, "\\");
+	}
 	try {
 		std::unique_ptr<SceneLoader> sceneLoader = std::make_unique<SceneLoader>(scene, argv[1]);
 		sceneLoader->load();
@@ -33,21 +39,26 @@ int main(int argc, char* argv[]) {
 			pathTracer->iterate();
 
 		auto frameBuf = pathTracer->getFrameBuffer();
-		saveHDR(scene.config.window, frameBuf.get(), 3);
+		saveHDR(scene.config.window, frameBuf.get(), 3, saveDir + "/nagi_result_");
+		savePNG(scene.config.window, frameBuf.get(), 3, scene.config.gamma, saveDir + "/nagi_result_");
 
 		if (scene.config.denoiser != DENOISER_TYPE_NONE) {
 			std::unique_ptr<Denoiser> denoiser = std::make_unique<Denoiser>(scene, *pathTracer);
 			auto denoisedFrameBuf = denoiser->denoise();
-			saveHDR(scene.config.window, denoisedFrameBuf.get(), 3, "./nagi_result_denoised_");
+			saveHDR(scene.config.window, denoisedFrameBuf.get(), 3, saveDir + "/nagi_result_denoised_");
+			savePNG(scene.config.window, denoisedFrameBuf.get(), 3, scene.config.gamma, saveDir + "/nagi_result_denoised_");
 			denoiser.reset(nullptr);
 		}
 
-		auto normal = pathTracer->getNormalBuffer();
-		saveHDR(scene.config.window, normal.get(), 3, "./normal_");
+		//auto normal = pathTracer->getNormalBuffer();
+		//for (int i = 0; i < scene.config.window.pixels * 3; i++) {
+		//	normal[i] = (normal[i] + 1.f) / 2.f;
+		//}
+		//saveHDR(scene.config.window, normal.get(), 3, saveDir + "/normal_");
 		//auto albedo = pathTracer->getAlbedoBuffer();
-		//saveHDR(scene.config.window, albedo.get(), 3, "./albedo_");
+		//saveHDR(scene.config.window, albedo.get(), 3, saveDir + "/albedo_");
 		//auto depth = pathTracer->getDepthBuffer();
-		//saveHDR(scene.config.window, depth.get(), 1, "./depth_");
+		//saveHDR(scene.config.window, depth.get(), 1, saveDir + "/depth_");
 
 		pathTracer.reset(nullptr);
 		bvh.reset(nullptr);

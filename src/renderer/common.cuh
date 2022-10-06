@@ -319,8 +319,7 @@ struct Configuration {
 	int spp{ 64 };
 	int maxBounce{ 64 };
 	int denoiser{ 2 };
-	float alpha{ 1.f };
-	float gamma{ 1.f };
+	float gamma{ 2.2f };
 };
 
 struct Scene {
