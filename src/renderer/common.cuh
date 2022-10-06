@@ -297,7 +297,7 @@ struct Material {
 	Texture metallicTex;
 	Texture normalTex;
 	Texture occlusionTex;
-	float ior{ 1.f };
+	float ior{ 1.5f };
 };
 inline __device__ __host__ bool hasTexture(const Material& mtl, unsigned int type) {
 	return (mtl.textures & (1 << type)) != 0;
@@ -337,6 +337,10 @@ struct Scene {
 inline __device__ __host__ bool hasMaterial(const Scene& scene, unsigned int type) {
 	return (scene.mtlTypes & (1 << type)) != 0;
 }
+inline __device__ __host__ void addMaterialType(Scene& scene, unsigned int type) {
+	scene.mtlTypes = (scene.mtlTypes | (1 << type));
+}
+
 extern Scene scene; // global variable
 
 }

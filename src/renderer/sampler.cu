@@ -88,41 +88,29 @@ __device__ __host__ glm::vec3 refractionSampler(float iorI, float iorT, const gl
     return wt;
 }
 
-__device__ __host__ glm::vec3 refractionSampler(float ior, const glm::vec3& wi, const glm::vec3& n, float* F, bool* in) {
-    glm::vec3 ni, nt, wt;
+__device__ __host__ glm::vec3 refractionSampler(float ior, const glm::vec3& wi, const glm::vec3& ni, float* F, bool enter) {
+    glm::vec3 nt{ -ni }, wt;
     float r1, r2;
-    if (glm::dot(wi, n) >= 0.f) { // getting out
-        *in = false;
-        ni = -n;
-        nt = n;
+    float eta = enter? 1.f / ior : ior;
+    float iorI = enter ? 1.f : ior;
+    float iorT = enter ? ior : 1.f;
 
-        wt = glm::refract(wi, ni, ior);
-        wt = wi;
-        float cosi = glm::dot(wi, ni);
-        float cost = glm::dot(wt, nt);
-        float ti = cosi;
-        float it = ior * cost;
-        float tt = cost;
-        float ii = ior * cosi;
-        r1 = (ti - it) / (ti + it);
-        r2 = (ii - tt) / (ii + tt);
+    float dotValue(glm::dot(wi, ni));
+    float k(1.f - eta * eta * (1.f - dotValue * dotValue));
+    if (k > 0) wt = eta * wi - (eta * dotValue + sqrtf(k)) * ni;
+    else {
+        *F = FLT_MAX;
+        return ni;
     }
-    else { // coming in
-        *in = true;
-        ni = n;
-        nt = -n;
+    float cosi = glm::dot(-wi, ni);
+    float cost = glm::dot(wt, nt);
+    float ti = iorT * cosi;
+    float it = iorI * cost;
+    float tt = iorT * cost;
+    float ii = iorI * cosi;
+    r1 = (ti - it) / (ti + it);
+    r2 = (ii - tt) / (ii + tt);
 
-        wt = glm::refract(wi, ni, 1.f / ior);
-        wt = wi;
-        float cosi = glm::dot(wi, ni);
-        float cost = glm::dot(wt, nt);
-        float ti = ior * cosi;
-        float it = cost;
-        float tt = ior * cost;
-        float ii = cosi;
-        r1 = (ti - it) / (ti + it);
-        r2 = (ii - tt) / (ii + tt);
-    }
     *F = 0.5f * (r1 * r1 + r2 * r2);
     return wt;
 }

@@ -16,7 +16,7 @@ __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& normal, floa
 
 __device__ __host__ glm::vec3 refractionSampler(float iorI, float iorT, const glm::vec3& wi, const glm::vec3& n, float* F);
 
-__device__ __host__ glm::vec3 refractionSampler(float ior, const glm::vec3& wi, const glm::vec3& n, float* F, bool* in);
+__device__ __host__ glm::vec3 refractionSampler(float ior, const glm::vec3& wi, const glm::vec3& n, float* F, bool enter);
 
 __device__ __host__ glm::vec3 ggxImportanceSampler(
 	float alpha, const glm::vec3& wi, const glm::vec3& normal, float* pdf, float rnd1, float rnd2);

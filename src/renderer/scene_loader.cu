@@ -131,23 +131,23 @@ void SceneLoader::loadMaterials() {
 			if (hasItem(items, "type")) {
 				std::string type = items["type"];
 				if (type == "Lambert") {
-					scene.mtlTypes = scene.mtlTypes | (0x01 << MTL_TYPE_LAMBERT);
+					addMaterialType(scene, MTL_TYPE_LAMBERT);
 					mtl.type = MTL_TYPE_LAMBERT;
 				}
 				else if (type == "Microfacet") {
-					scene.mtlTypes = scene.mtlTypes | (0x01 << MTL_TYPE_MICROFACET);
+					addMaterialType(scene, MTL_TYPE_MICROFACET);
 					mtl.type = MTL_TYPE_MICROFACET;
 				}
 				else if (type == "Glass") {
-					scene.mtlTypes = scene.mtlTypes | (0x01 << MTL_TYPE_GLASS);
+					addMaterialType(scene, MTL_TYPE_GLASS);
 					mtl.type = MTL_TYPE_GLASS;
 				}
 				else if (type == "Light Source") {
-					scene.mtlTypes = scene.mtlTypes | (0x01 << MTL_TYPE_LIGHT_SOURCE);
+					addMaterialType(scene, MTL_TYPE_LIGHT_SOURCE);
 					mtl.type = MTL_TYPE_LIGHT_SOURCE;
 				}
 				else if (type == "Mirror") {
-					scene.mtlTypes = scene.mtlTypes | (0x01 << MTL_TYPE_MIRROR);
+					addMaterialType(scene, MTL_TYPE_MIRROR);
 					mtl.type = MTL_TYPE_MIRROR;
 				}
 				else throw std::runtime_error("Error: Unknown material type.");

@@ -1,7 +1,7 @@
 {
     "graphics": {
 		"resolution": [1024, 1024],
-        "sample rate": 512,
+        "sample rate": 64,
         "max bounce": 16,
 		"denoiser": 2,
         "alpha": 1.0,
@@ -31,6 +31,10 @@
 			"roughness texture": "rusted_iron_roughness.png",
 			"normal texture": "rusted_iron_normal.png"
         },
+		"glass":{
+			"type":"Glass",
+			"ior": 1.5
+		},
         "Floor": {
             "type":  "Microfacet",
             "base texture": "WoodFloor.jpg",
@@ -57,11 +61,11 @@
                 0.68
             ]
         },
-        "brass": {
+        "gold": {
             "type":  "Microfacet",
-			"metallic": 0.98,
+			"metallic": 1,
 			"roughness": 0.15,
-			"base texture": "Brass_Albedo.png"
+			"albedo": [1.00, 0.71, 0.29]
         },
         "mirror": {
             "type":  "Mirror"
@@ -186,6 +190,17 @@
             "mesh": "quad",
             "material": "LeftWall"
         },
+		"glass":{
+			"position": [0.1, 0.3, 0.6],
+            "rotation": [
+                240,
+                0,
+                0
+            ],
+			"scale":[0.6,0.6,0.6],
+			"material": "glass",
+			"mesh":"sphere"
+		},
 		"vase": {
             "position": [
                 0.42,
@@ -203,7 +218,7 @@
                 0
             ],
             "mesh": "smooth_vase",
-            "material": "brass"
+            "material": "gold"
         },	
 		"mirror": {
             "position": [

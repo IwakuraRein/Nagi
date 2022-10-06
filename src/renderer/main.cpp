@@ -42,8 +42,8 @@ int main(int argc, char* argv[]) {
 			denoiser.reset(nullptr);
 		}
 
-		//auto normal = pathTracer->getNormalBuffer();
-		//saveHDR(scene.config.window, normal.get(), 3, "./normal_");
+		auto normal = pathTracer->getNormalBuffer();
+		saveHDR(scene.config.window, normal.get(), 3, "./normal_");
 		//auto albedo = pathTracer->getAlbedoBuffer();
 		//saveHDR(scene.config.window, albedo.get(), 3, "./albedo_");
 		//auto depth = pathTracer->getDepthBuffer();

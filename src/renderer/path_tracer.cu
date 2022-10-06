@@ -139,7 +139,7 @@ void PathTracer::iterate() {
 			//sortRays(remainingRays);
 
 			if (firstIntersection) {
-				generateGbuffer(remainingRays, spp);
+				generateGbuffer(window.pixels, spp);
 				firstIntersection = false;
 			}
 
@@ -193,6 +193,7 @@ __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStar
 	result.tangent = pickedTangent;
 	result.uv = pickedUV;
 	result.position = r.origin + r.dir * (minDist - 0.001f);
+	//r.origin = r.origin + r.dir * (minDist - 0.001f);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
 	out[idx] = result;
 }
@@ -237,6 +238,7 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 	result.tangent = pickedTangent;
 	result.uv = pickedUV;
 	result.position = r.origin + r.dir * (minDist - 0.001f);
+	//r.origin = r.origin + r.dir * (minDist - 0.001f);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
 	out[idx] = result;
 
@@ -319,6 +321,7 @@ __global__ void kernBVHIntersectTest(
 	result.tangent = pickedTangent;
 	result.uv = pickedUV;
 	result.position = r.origin + r.dir * (minTrigD - 0.001f);
+	//r.origin = r.origin + r.dir * (minTrigD - 0.001f);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
 	out[idx] = result;
 }
@@ -351,7 +354,7 @@ void PathTracer::sortRays(int rayNum) {
 }
 
 __global__ void kernGenerateGbuffer(
-	int rayNum, float currentSpp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
+	int rayNum, float currentSpp, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
@@ -379,7 +382,7 @@ __global__ void kernGenerateGbuffer(
 	}
 	else albedo = mtl.albedo;
 
-	float depth = glm::length(intersect.position - p.ray.origin);
+	float depth = glm::length(p.ray.origin - camPos);
 
 	// blend the gbuffer is good for denoising. 
 	// reference: https://github.com/tunabrain/tungsten/issues/69
@@ -394,7 +397,7 @@ __global__ void kernGenerateGbuffer(
 void PathTracer::generateGbuffer(int rayNum, int spp) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernGenerateGbuffer<<<blocksPerGrid, BLOCK_SIZE >> > (
-		rayNum, (float)spp, devRayPool1, devResults1, devMtlBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
+		rayNum, (float)spp, scene.cam.position, devRayPool1, devResults1, devMtlBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
 }
 
 
@@ -418,10 +421,10 @@ __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectIn
 		p.remainingBounces = 0;
 	}
 	else {
-		auto rnd = makeSeededRandomEngine(spp, idx, 0);
+		auto rng = makeSeededRandomEngine(spp, idx, 0);
 		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
-		float samplingRnd1 = u01(rnd);
-		float samplingRnd2 = u01(rnd);
+		float samplingRnd1 = u01(rng);
+		float samplingRnd2 = u01(rng);
 		glm::vec3 normal, albedo;
 		glm::vec3 wo, bsdf;
 		float pdf;
@@ -530,10 +533,10 @@ __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo
 		p.color = glm::vec3{ 0.f };
 	}
 	else {
-		auto rnd = makeSeededRandomEngine(spp, idx, 0);
+		auto rng = makeSeededRandomEngine(spp, idx, 0);
 		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 		glm::vec3 normal, albedo;
-		glm::vec3 wo, bsdf;
+		glm::vec3 wo;
 		float f;
 		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
 			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
@@ -549,21 +552,24 @@ __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo
 		}
 		else albedo = mtl.albedo;
 
-		bool in;
-		float r = u01(rnd);
-		wo = refractionSampler(mtl.ior, p.ray.dir, normal, &f, &in);
-		if (r < f) {
-			if (!in) normal = -normal;
+		p.color = p.color * albedo;
+
+		bool enter{ true };
+		if (glm::dot(p.ray.dir, normal) > 0.f) {
+			enter = false;
+			normal = -normal;
+		}
+		//float aaa = glm::dot(p.ray.dir, normal);
+		wo = refractionSampler(mtl.ior, p.ray.dir, normal, &f, &enter);
+		//float bbb = glm::dot(p.ray.dir, wo);
+		//printf("%f %f %f %f\n", mtl.ior, aaa, bbb, f);
+		float r = u01(rng);
+		if (r < f) { //reflect
 			wo = glm::reflect(p.ray.dir, normal);
-			bsdf = albedo * f;
 		}
-		else {
-			bsdf = albedo * (1.f - f);
-		}
-		p.color = p.color * bsdf; // lambert is timed inside the bsdf
+		p.ray.origin += wo * 0.002f;
 		p.ray.dir = wo;
 		p.ray.invDir = 1.f / wo;
-
 		p.remainingBounces--;
 	}
 	rayPool[idx] = p;
@@ -588,10 +594,10 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, Intersec
 		p.remainingBounces = 0;
 	}
 	else {
-		auto rnd = makeSeededRandomEngine(spp, idx, 0);
+		auto rng = makeSeededRandomEngine(spp, idx, 0);
 		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
-		float samplingRnd1 = u01(rnd);
-		float samplingRnd2 = u01(rnd);
+		float samplingRnd1 = u01(rng);
+		float samplingRnd2 = u01(rng);
 		glm::vec3 normal, albedo;
 		glm::vec3 wo, bsdf;
 		float pdf;
@@ -618,7 +624,7 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, Intersec
 		}
 		else roughness = mtl.roughness;
 
-		float r = u01(rnd);
+		float r = u01(rng);
 		float s = 0.5f + metallic / 2.f;
 		float pdf2;
 		wo = ggxImportanceSampler(roughness, p.ray.dir, normal, &pdf, samplingRnd1, samplingRnd2);
@@ -684,7 +690,6 @@ int PathTracer::compactRays(int rayNum, Path* rayPool, Path* compactedRayPool, I
 	int remaining = tmp - tRaysOut;
 	terminatedRayNum += (rayNum - remaining);
 	return remaining;
-	//return 0;
 }
 
 // delete terminated rays
@@ -700,14 +705,11 @@ int PathTracer::compactRays(int rayNum, Path* rayPool, Path* compactedRayPool) {
 	int remaining = tmp - tRaysOut;
 	terminatedRayNum += (rayNum - remaining);
 	return remaining;
-	//return 0;
 }
 
 __global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam/*, bool jitter, bool DOP*/) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= window.pixels) return;
-	float rnd1 = 0.0;
-	float rnd2 = 0.0;
 	thrust::default_random_engine rng = makeSeededRandomEngine(spp, idx, 0);
 	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 
@@ -726,8 +728,8 @@ __global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, in
 	float theta = TWO_PI * u01(rng);
 	float r = u01(rng) * cam.apenture;
 
-	rnd1 = u01(rng) - 0.5f;
-	rnd2 = u01(rng) - 0.5f;
+	float rnd1 = u01(rng) - 0.5f;
+	float rnd2 = u01(rng) - 0.5f;
 
 	glm::vec3 lookAt = cam.filmOrigin
 		- cam.upDir * (((float)py + rnd1) * cam.pixelHeight + cam.halfPixelHeight)

@@ -12,10 +12,10 @@
 namespace nagi {
 
 struct IntersectInfo {
-	glm::vec3 position;
 	glm::vec3 normal;
 	glm::vec3 tangent;
 	glm::vec2 uv;
+	glm::vec3 position;
 	int mtlIdx;
 };
 struct ifHit {
@@ -59,7 +59,7 @@ __global__ void kernShadeMirror(int rayNum, int spp, Path* rayPool, IntersectInf
 __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* rayPool, float* frameBuffer);
-__global__ void kernGenerateGbuffer(int rayNum, float currentSpp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
+__global__ void kernGenerateGbuffer(int rayNum, float currentSpp, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
 
 class PathTracer {
 public:
