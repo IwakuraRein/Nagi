@@ -23,7 +23,7 @@ Nagi is a simple path tracer built in CUDA.
 
 **Depth of Field**
 
-![](./doc/depth_of_field.png)
+![](./doc/dop.png)
 
 **Denoiser**
 ![](./doc/denoiser.png)
