@@ -1,6 +1,8 @@
 # Nagi
 
-This is a simple path tracer built in CUDA.
+![](./doc/depth_of_field.png)
+
+Nagi is a simple path tracer built in CUDA.
 
 ## Features
 
