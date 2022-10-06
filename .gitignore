@@ -17,7 +17,7 @@ normal*.hdr
 normal*.png
 albedo*.hdr
 albedo*.png
-
+imgui.ini
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
