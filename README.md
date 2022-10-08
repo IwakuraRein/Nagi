@@ -52,7 +52,7 @@ After introducing Oct-tree structure, a huge improvement of speed can be seen:
 
 ![](./doc/time-oct-tree.png)
 
-However, when a mesh is rectangular, like this mesh from the Staircase scene, the oct-tree fails to divide it effectively.
+However, when a mesh is rectangular and contain large triangles, like this mesh from the Staircase scene, the oct-tree fails to divide it effectively.
 
 ![](./doc/stair_case_mesh.png)
 
