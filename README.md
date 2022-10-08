@@ -31,9 +31,9 @@ For example:
 Nagi.exe ./res/cornell_box/cornell_box.json ./results
 ```
 
-The scene is defined by a JSON file. It is very self-explainary and contains rendering configurations. It currently support 5 material types: Lambert, Mirror, Glass, Microfacet, and Light Source. It's also possible to add depth of field by setting camera's f-number and focus distance (or a look-at point).
+The scene is defined by a JSON file. It is very self-explanatory and contains rendering configurations. It currently supports 5 material types: Lambert, Mirror, Glass, Microfacet, and Light Source. It's also possible to add depth of field by setting the camera's f-number and focus distance (or a look-at point).
 
-## Gallary
+## Gallery
 
 ![](./doc/result1.png)
 
@@ -43,13 +43,22 @@ The scene is defined by a JSON file. It is very self-explainary and contains ren
 
 ## Oct-tree
 
-To accelarate the intersection test. I divide each model's triangles and store them in oct-tree structures. Then all objects will be passed into the denoiser in an array sorted by their volume. The path tracer will perform a depth first search in the intersection test.
-
-The triangle intersected with the shortest distance will be recorded. If the distance to an object is larger than the last recorded distance to the triangle, all its triangles will be supassed.
+To accelerate the intersection test. I divide each model's triangles and store them in oct-tree structures. Then all objects will be passed into the denoiser in an array sorted by their volume. The path tracer will perform a depth-first search in the intersection test.
+The triangle intersected with the shortest distance will be recorded. If the distance to an object is larger than the last recorded distance to the triangle, all its triangles will be surpassed.
 
 ## Performance Analysis
 
+After introducing Oct-tree structure, a huge improvement of speed can be seen:
 
+![](./doc/time-oct-tree.png)
+
+However, when a mesh is rectangular, like this mesh from the Staircase scene, the oct-tree fails to divide it effectively.
+
+![](./doc/stair_case_mesh.png)
+
+The time cost for the Staircase scene increases to 8 seconds per spp. In general, the time cost of 1 spp varies from 0.2-2 seconds.
+
+The performance slightly drops if rays are sorted according to their materials after the intersection. The stable sort function itself is costly so the improvement may be counteracted.
 
 ## Denoiser
 
