@@ -42,6 +42,9 @@ __device__ __host__ bool rayTrigIntersect(
 		*normal = (1 - baryCoord.x - baryCoord.y) * triangle.vert0.normal + baryCoord.x * triangle.vert1.normal + baryCoord.y * triangle.vert2.normal;
 		*uv = (1 - baryCoord.x - baryCoord.y) * triangle.vert0.uv + baryCoord.x * triangle.vert1.uv + baryCoord.y * triangle.vert2.uv;
 		*tangent = (1 - baryCoord.x - baryCoord.y) * triangle.vert0.tangent + baryCoord.x * triangle.vert1.tangent + baryCoord.y * triangle.vert2.tangent;
+		//*normal = baryCoord.x * triangle.vert0.normal + baryCoord.y * triangle.vert1.normal + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.normal;
+		//*uv = baryCoord.x * triangle.vert0.uv + baryCoord.y * triangle.vert1.uv + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.uv;
+		//*tangent = baryCoord.x * triangle.vert0.tangent + baryCoord.y * triangle.vert1.tangent + (1 - baryCoord.x - baryCoord.y) * triangle.vert2.tangent;
 		return true;
 	}
 	return false;

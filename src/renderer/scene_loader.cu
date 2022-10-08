@@ -98,11 +98,11 @@ void SceneLoader::loadConfig() {
 	Configuration config{};
 	for (auto& item : jFile["graphics"].items()) {
 		if (item.key() == "resolution") {
-			config.window.width = item.value()[0];
-			config.window.height = item.value()[1];
-			config.window.pixels = config.window.width * config.window.height;
-			config.window.invWidth = 1.f / (float)config.window.width;
-			config.window.invHeight = 1.f / (float)config.window.height;
+			scene.window.width = item.value()[0];
+			scene.window.height = item.value()[1];
+			scene.window.pixels = scene.window.width * scene.window.height;
+			scene.window.invWidth = 1.f / (float)scene.window.width;
+			scene.window.invHeight = 1.f / (float)scene.window.height;
 		}
 		if (item.key() == "gamma")
 			config.gamma = item.value();
@@ -112,6 +112,21 @@ void SceneLoader::loadConfig() {
 			config.maxBounce = item.value();
 		if (item.key() == "denoiser")
 			config.denoiser = item.value();
+		if (item.key() == "skybox") {
+			std::string texName{ item.value() };
+			texName = "skybox" + texName; // encoding texture's path with its type
+
+			std::string texPath = item.value();
+			if (!doesFileExist(texPath)) {
+				std::string dir = strRightStrip(filePath, getFileName(filePath));
+				if (doesFileExist(dir + texPath)) texPath = dir + texPath;
+				else if (doesFileExist(dir + "textures/" + texPath)) texPath = dir + "textures/" + texPath;
+				else throw std::runtime_error("Error: Skybox image file doesn't exist.");
+			}
+			textures.emplace(texName, loadTexture(texPath, 4));
+			scene.skybox = textures[texName];
+			scene.hasSkyBox = true;
+		}
 	}
 	scene.config = config;
 	if (printDetails) std::cout << " done." << std::endl;
@@ -336,7 +351,7 @@ void SceneLoader::loadObjects() {
 void SceneLoader::loadCameras() {
 	if (printDetails) std::cout << "  Loading camera... ";
 	Camera cam{};
-	auto& camera = jFile["cameras"];
+	auto& camera = jFile["camera"];
 	if (hasItem(camera, "position")) {
 		auto& position = camera["position"];
 		cam.position = glm::vec3{ position[0], position[1], position[2] };
@@ -362,7 +377,7 @@ void SceneLoader::loadCameras() {
 		if (camera["aspect"] <= 0.f) throw std::runtime_error("Error: Camera aspect must be postive.");
 		cam.aspect = camera["aspect"];
 	}
-	else cam.aspect = (float)scene.config.window.width * scene.config.window.invHeight;
+	else cam.aspect = (float)scene.window.width * scene.window.invHeight;
 
 	if (hasItem(camera, "up")) {
 		auto& up = camera["up"];
@@ -386,8 +401,8 @@ void SceneLoader::loadCameras() {
 
 	cam.halfH = cam.focusDistance * glm::tan(cam.fov/2.f) * CAMERA_MULTIPLIER;
 	cam.halfW = cam.halfH * cam.aspect;
-	cam.pixelHeight = cam.halfH * 2.f / scene.config.window.height;
-	cam.pixelWidth = cam.halfW * 2.f / scene.config.window.width;
+	cam.pixelHeight = cam.halfH * 2.f / scene.window.height;
+	cam.pixelWidth = cam.halfW * 2.f / scene.window.width;
 	cam.halfPixelHeight = cam.pixelHeight / 2.f;
 	cam.halfPixelWidth = cam.pixelWidth / 2.f;
 	cam.filmOrigin = cam.position + cam.forwardDir * cam.focusDistance * CAMERA_MULTIPLIER - cam.rightDir * cam.halfW + cam.upDir * cam.halfH;
@@ -469,7 +484,7 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 				};
 				trig.vert0.uv = {
 						attrib.texcoords[2 * vertInfo0.texcoord_index + 0],
-						attrib.texcoords[2 * vertInfo0.texcoord_index + 1]
+						1.f - attrib.texcoords[2 * vertInfo0.texcoord_index + 1]
 				};
 				trig.vert1.position = {
 						attrib.vertices[3 * vertInfo1.vertex_index + 0],
@@ -483,7 +498,7 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 				};
 				trig.vert1.uv = {
 						attrib.texcoords[2 * vertInfo1.texcoord_index + 0],
-						attrib.texcoords[2 * vertInfo1.texcoord_index + 1]
+						1.f - attrib.texcoords[2 * vertInfo1.texcoord_index + 1]
 				};
 				trig.vert2.position = {
 						attrib.vertices[3 * vertInfo2.vertex_index + 0],
@@ -497,7 +512,7 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 				};
 				trig.vert2.uv = {
 						attrib.texcoords[2 * vertInfo2.texcoord_index + 0],
-						attrib.texcoords[2 * vertInfo2.texcoord_index + 1]
+						1.f - attrib.texcoords[2 * vertInfo2.texcoord_index + 1]
 				};
 			}
 

@@ -315,7 +315,6 @@ struct WindowSize {
 };
 
 struct Configuration {
-	WindowSize window;
 	int spp{ 64 };
 	int maxBounce{ 64 };
 	int denoiser{ 2 };
@@ -324,9 +323,12 @@ struct Configuration {
 
 struct Scene {
 	Configuration config;
+	WindowSize window;
 	Camera cam;
 
 	BoundingBox bbox;
+	Texture skybox;
+	bool hasSkyBox{ false };
 
 	std::vector<Object> objBuf;
 	std::vector<Material> mtlBuf;

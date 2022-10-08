@@ -26,8 +26,8 @@ int main(int argc, char* argv[]) {
 	}
 	try {
 		std::unique_ptr<SceneLoader> sceneLoader = std::make_unique<SceneLoader>(scene, argv[1]);
+		sceneLoader->printDetails = true;
 		sceneLoader->load();
-		
 		std::unique_ptr<BVH> bvh = std::make_unique<BVH>(scene);
 		bvh->build();
 		std::unique_ptr<PathTracer> pathTracer = std::make_unique<PathTracer>(scene, *bvh);
@@ -39,33 +39,33 @@ int main(int argc, char* argv[]) {
 			pathTracer->iterate();
 
 		auto frameBuf = pathTracer->getFrameBuffer();
-		saveHDR(scene.config.window, frameBuf.get(), 3, saveDir + "/nagi_result_");
-		savePNG(scene.config.window, frameBuf.get(), 3, scene.config.gamma, saveDir + "/nagi_result_");
+		saveHDR(scene.window, frameBuf.get(), 3, saveDir + "/nagi_result_");
+		savePNG(scene.window, frameBuf.get(), 3, scene.config.gamma, saveDir + "/nagi_result_");
 
 		if (scene.config.denoiser != DENOISER_TYPE_NONE) {
 			std::unique_ptr<Denoiser> denoiser = std::make_unique<Denoiser>(scene, *pathTracer);
 			auto denoisedFrameBuf = denoiser->denoise();
-			saveHDR(scene.config.window, denoisedFrameBuf.get(), 3, saveDir + "/nagi_result_denoised_");
-			savePNG(scene.config.window, denoisedFrameBuf.get(), 3, scene.config.gamma, saveDir + "/nagi_result_denoised_");
+			saveHDR(scene.window, denoisedFrameBuf.get(), 3, saveDir + "/nagi_result_denoised_");
+			savePNG(scene.window, denoisedFrameBuf.get(), 3, scene.config.gamma, saveDir + "/nagi_result_denoised_");
 			denoiser.reset(nullptr);
 		}
 
 		//auto normal = pathTracer->getNormalBuffer();
-		//for (int i = 0; i < scene.config.window.pixels * 3; i++) {
+		//for (int i = 0; i < scene.window.pixels * 3; i++) {
 		//	normal[i] = (normal[i] + 1.f) / 2.f;
 		//}
-		//saveHDR(scene.config.window, normal.get(), 3, saveDir + "/normal_");
+		//saveHDR(scene.window, normal.get(), 3, saveDir + "/normal_");
 		//auto albedo = pathTracer->getAlbedoBuffer();
-		//saveHDR(scene.config.window, albedo.get(), 3, saveDir + "/albedo_");
+		//saveHDR(scene.window, albedo.get(), 3, saveDir + "/albedo_");
 		//auto depth = pathTracer->getDepthBuffer();
-		//saveHDR(scene.config.window, depth.get(), 1, saveDir + "/depth_");
+		//saveHDR(scene.window, depth.get(), 1, saveDir + "/depth_");
 
 		pathTracer.reset(nullptr);
 		bvh.reset(nullptr);
 		sceneLoader.reset(nullptr);
 
 
-		//std::unique_ptr<GUI> gui = std::make_unique<GUI>(scene.config.window.width, scene.config.window.height, "Nagi");
+		//std::unique_ptr<GUI> gui = std::make_unique<GUI>(scene.window.width, scene.window.height, "Nagi");
 		//while (!glfwWindowShouldClose(gui->window)) {
 		//	gui->render();
 		//}

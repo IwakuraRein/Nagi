@@ -59,11 +59,15 @@ __global__ void kernShadeMirror(int rayNum, int spp, Path* rayPool, IntersectInf
 __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* rayPool, float* frameBuffer);
-__global__ void kernGenerateGbuffer(int rayNum, float currentSpp, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
+__global__ void kernGenerateGbuffer(
+	int rayNum, float currentSpp, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
+__global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool);
+__global__ void kernGenerateGbufferWithSkybox(
+	int rayNum, float currentSpp, cudaTextureObject_t skybox, glm::vec3 up, glm::vec3 right, Path* rayPool, float* albedoBuf);
 
 class PathTracer {
 public:
-	PathTracer(Scene& Scene, BVH& BVH) :scene{ Scene }, window{ Scene.config.window }, bvh{ BVH } {}
+	PathTracer(Scene& Scene, BVH& BVH) :scene{ Scene }, window{ scene.window }, bvh{ BVH } {}
 	~PathTracer();
 	PathTracer(const PathTracer&) = delete;
 	void operator=(const PathTracer&) = delete;
@@ -87,6 +91,9 @@ public:
 	int compactRays(int rayNum, Path* rayPool, Path* compactedRayPool, IntersectInfo* intersectResults, IntersectInfo* compactedIntersectResults);
 
 	void writeFrameBuffer(int spp);
+
+	void shadeWithSkybox();
+	void generateGbufferWithSkybox();
 
 	bool finish() const { return spp > scene.config.spp; }
 

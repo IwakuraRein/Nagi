@@ -1,9 +1,9 @@
 {
     "graphics": {
-		"resolution": [1024, 1024],
-        "sample rate": 64,
+        "resolution": [1024, 1024],
+        "sample rate": 32,
         "max bounce": 16,
-		"denoiser": 2,
+        "denoiser": 2,
         "gamma": 2.2
     },
     "materials": {
@@ -21,14 +21,24 @@
                 0.14,
                 0.45,
                 0.091
-            ],
-			"roughness":0,
-			"metallic":1
+            ]
+        },
+        "rust": {
+            "type": "Microfacet",
+            "base texture": "rusted_iron_albedo.png",
+            "metallic texture": "rusted_iron_metallic.png",
+            "roughness texture": "rusted_iron_roughness.png",
+            "normal texture": "rusted_iron_normal.png"
+        },
+        "glass": {
+            "type": "Glass",
+            "ior": 1.5
         },
         "Floor": {
-            "type": "Lambert",
-			"roughness": 0.3,
-            "base texture": "WoodFloor.jpg"
+            "type": "Microfacet",
+            "base texture": "WoodFloor.jpg",
+            "metallic": 0,
+            "roughness": 0.2
         },
         "Ceiling": {
             "type": "Lambert",
@@ -40,7 +50,7 @@
         },
         "BackWall": {
             "type": "Lambert",
-            "base texture": "backwall.png"
+            "base texture": "backwall2.png"
         },
         "ShortBox": {
             "type": "Lambert",
@@ -50,20 +60,17 @@
                 0.68
             ]
         },
-        "brass": {
-            "type": "Lambert",
-			"metalic": 1.0,
-			"roughness": 0.15,
-			"base texture": "Brass_Albedo.png"
+        "gold": {
+            "type": "Microfacet",
+            "metallic": 1,
+            "roughness": 0.15,
+            "albedo": [1.00, 0.71, 0.29]
         },
-        "china": {
-            "type": "Lambert",
-			"metalic": 0.0,
-			"roughness": 0.3,
-			"alabedo":[1,1,1]
+        "mirror": {
+            "type": "Mirror"
         },
         "TallBox": {
-            "type": "Lambert",
+            "type": "Microfacet",
             "albedo": [
                 0.725,
                 0.71,
@@ -72,7 +79,7 @@
         },
         "LightPanel": {
             "type": "Light Source",
-            "emittance": [17,12,4]
+            "emittance": [17, 12, 4]
         }
     },
     "objects": {
@@ -95,7 +102,7 @@
             "material": "BackWall"
         },
         "Floor": {
-			"position":[0,0,0],
+            "position": [0, 0, 0],
             "scale": [
                 2,
                 2,
@@ -108,6 +115,22 @@
             ],
             "mesh": "quad",
             "material": "Floor"
+        },
+        "ShortBox": {
+            "position": [-0.3,
+                0.3, -0.2
+            ],
+            "scale": [
+                0.594811,
+                0.604394,
+                0.6
+            ],
+            "rotation": [
+                90,
+                120, -163.36
+            ],
+            "mesh": "cube",
+            "material": "rust"
         },
         "Ceiling": {
             "position": [
@@ -165,51 +188,58 @@
             "mesh": "quad",
             "material": "LeftWall"
         },
-		        "ShortBox": {
+        "glass": {
+            "position": [0.1, 0, 0.6],
+            "scale": [1.6, 1.6, 1.6],
+            "material": "glass",
+            "mesh": "glass"
+        },
+        "vase": {
             "position": [
-                0.328631,
-                0.3,
-                0.374592
+                0.42,
+                0,
+                0.25
             ],
             "scale": [
-                0.594811,
-                0.604394,
+                2.8,
+                3.5,
+                2.8
+            ],
+            "rotation": [
+                180,
+                0,
+                0
+            ],
+            "mesh": "smooth_vase",
+            "material": "gold"
+        },
+        "mirror": {
+            "position": [-0.67,
+                0.26,
+                0.5
+            ],
+            "scale": [
+                0.6,
+                0.6,
                 0.6
             ],
-            "rotation": [
-                90,
-                90, -163.36
+            "rotation": [-120,
+                45,
+                0
             ],
-            "mesh": "cube",
-            "material": "ShortBox"
-        },
-        "TallBox": {
-            "position": [-0.335439,
-                0.6, -0.291415
-            ],
-            "scale": [
-                0.607289,
-                0.597739,
-                1.2
-            ],
-            "rotation": [
-                90,
-                180,
-                160.812
-            ],
-            "mesh": "cube",
-            "material": "TallBox"
+            "material": "mirror",
+            "mesh": "quad"
         },
         "LightPanel": {
             "position": [
                 0,
                 1.99,
-                0
+                0.2
             ],
             "scale": [
-                0.47,
-                0.1786,
-                0.38
+                0.8,
+                0.8,
+                0.8
             ],
             "rotation": [
                 0,
@@ -218,20 +248,20 @@
             ],
             "mesh": "quad",
             "material": "LightPanel"
-		}
+        }
     },
-    "cameras": {
-		"position": [
-			0,
-			1,
-			3.5
-		],
-		"forward": [
-			0, 0, -1
-		],
-		"up": [
-			0, 1, 0
-		],
-		"fov": 43.5
-	}
+    "camera": {
+        "position": [
+            0,
+            1,
+            3.5
+        ],
+        "look at": [
+            0, 1, -1
+        ],
+        "up": [
+            0, 1, 0
+        ],
+        "fov": 43.5
+    }
 }

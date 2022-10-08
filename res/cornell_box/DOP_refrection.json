@@ -1,0 +1,104 @@
+{
+    "graphics": {
+        "resolution": [1600, 900],
+        "sample rate": 256,
+        "max bounce": 8,
+        "denoiser": 2,
+        "alpha": 1.0,
+        "gamma": 1.0
+    },
+    "materials": {
+        "LightPanel": {
+            "type": "Light Source",
+            "emittance": [15, 15, 15]
+        },
+        "glass": {
+            "type": "Glass",
+            "ior": 1.5
+        },
+        "wall": {
+            "type": "Lambert",
+            "base texture": "backwall3.png"
+        },
+        "Floor": {
+            "type": "Lambert",
+            "albedo": [
+                0.725,
+                0.71,
+                0.68
+            ],
+            "base texture": "chess board.png"
+        }
+    },
+    "objects": {
+        "Floor": {
+            "position": [
+                0, -1.5, 0
+            ],
+            "scale": [
+                10,
+                10,
+                10
+            ],
+            "rotation": [
+                180,
+                0,
+                0
+            ],
+            "mesh": "quad",
+            "material": "Floor"
+        },
+        "wall1": {
+            "scale": [
+                6,
+                6,
+                6
+            ],
+            "position": [
+                0, 1, -5
+            ],
+            "rotation": [-90, 0, 0],
+            "material": "wall",
+            "mesh": "quad"
+        },
+        "glass ball": {
+            "scale": [0.2, 0.2, 0.2],
+            "position": [0, -1, 3.2],
+            "material": "glass",
+            "mesh": "sphere"
+        },
+        "LightPanel": {
+            "position": [
+                0,
+                2.5,
+                0
+            ],
+            "scale": [
+                4,
+                4,
+                4
+            ],
+            "rotation": [
+                0,
+                0,
+                0
+            ],
+            "mesh": "quad",
+            "material": "LightPanel"
+        }
+    },
+    "camera": {
+        "position": [
+            0, -1,
+            4
+        ],
+        "look at": [
+            0, -1, 3.2
+        ],
+        "up": [
+            0, 1, 0
+        ],
+        "fov": 35,
+        "f-number": 2.8
+    }
+}

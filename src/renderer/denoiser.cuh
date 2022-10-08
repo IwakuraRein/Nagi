@@ -21,7 +21,7 @@ __global__ void kernBilateralFilter(
 class Denoiser {
 public:
 	Denoiser(Scene& Scene, PathTracer& PathTracer) :
-		scene{ Scene }, window{ Scene.config.window }, pathTracer{ PathTracer } {}
+		scene{ Scene }, window{ scene.window }, pathTracer{ PathTracer } {}
 	~Denoiser();
 	Denoiser(const Denoiser&) = delete;
 	void operator=(const Denoiser&) = delete;

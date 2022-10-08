@@ -120,44 +120,43 @@ PathTracer::~PathTracer() {
 
 // intersection test -> compact rays -> sort rays according to material -> compute color -> compact rays -> intersection test...
 void PathTracer::iterate() {
-	std::chrono::steady_clock::time_point timer1, timer2;
-	//timer1 = std::chrono::high_resolution_clock::now();
-	//for (int spp = 1; spp <= scene.config.spp; spp++) {
-		std::cout << "  Begin iteration " << spp << ". " << scene.config.spp - spp << " remaining." << std::endl;
-		if (printDetails) timer2 = std::chrono::high_resolution_clock::now();
-		dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
-		kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>> (window, spp, devRayPool1, scene.config.maxBounce, scene.cam);
-		checkCUDAError("kernInitializeRays failed.");
-		bool firstIntersection = true;
-		int remainingRays = window.pixels;
-		while (true) {
-			remainingRays = intersectionTest(remainingRays);
+	std::chrono::steady_clock::time_point timer;
+	std::cout << "  Begin iteration " << spp << ". " << scene.config.spp - spp << " remaining." << std::endl;
+	if (printDetails) timer = std::chrono::high_resolution_clock::now();
+	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
+	kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>> (window, spp, devRayPool1, scene.config.maxBounce, scene.cam);
+	checkCUDAError("kernInitializeRays failed.");
+	bool firstIntersection = true;
+	int remainingRays = window.pixels;
+	while (true) {
+		remainingRays = intersectionTest(remainingRays);
 
-			//std::cout << remainingRays << " ";
-			if (remainingRays <= 0) break;
+		//std::cout << remainingRays << " ";
+		if (remainingRays <= 0) break;
 
-			//sortRays(remainingRays);
+		//sortRays(remainingRays);
 
-			if (firstIntersection) {
-				generateGbuffer(window.pixels, spp);
-				firstIntersection = false;
+		if (firstIntersection) {
+			generateGbuffer(remainingRays, spp);
+			if (scene.hasSkyBox) {
+				generateGbufferWithSkybox();
 			}
-
-			remainingRays = shade(remainingRays, spp);
-			//std::cout << remainingRays << std::endl;
-			if (remainingRays <= 0) break;
+			firstIntersection = false;
 		}
-		writeFrameBuffer(spp);
-		terminatedRayNum = 0;
-		//if (printDetails) {
-			float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer2).count();
-			std::cout << "  Iteration " << spp << " finished. Time cost: " << runningTime <<
-				" seconds. Time Remaining: " << runningTime * (scene.config.spp - spp) << " seconds." << std::endl;
-		//}
-		spp++;
+
+		remainingRays = shade(remainingRays, spp);
+		//std::cout << remainingRays << std::endl;
+		if (remainingRays <= 0) break;
+	}
+	//if (scene.hasSkyBox) {
+	//	shadeWithSkybox();
 	//}
-	//float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer1).count();
-	//std::cout << "Ray tracing finished. Time cost: " << runningTime << " seconds." << std::endl;
+	writeFrameBuffer(spp);
+	terminatedRayNum = 0;
+	float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
+	std::cout << "  Iteration " << spp << " finished. Time cost: " << runningTime <<
+		" seconds. Time Remaining: " << runningTime * (scene.config.spp - spp) << " seconds." << std::endl;
+	spp++;
 }
 
 __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out) {
@@ -367,7 +366,7 @@ __global__ void kernGenerateGbuffer(
 	if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
 		glm::mat3 TBN = glm::mat3(intersect.tangent, glm::cross(intersect.normal, intersect.tangent), intersect.normal);
 		float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersect.uv.x, intersect.uv.y);
-		glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, 1.f };
+		glm::vec3 bump{ texVal.x * 2.f - 1.f, texVal.y * 2.f - 1.f, 1.f };
 		bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
 		normal = glm::normalize(TBN * bump);
 	}
@@ -771,6 +770,55 @@ void PathTracer::writeFrameBuffer(int spp) {
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernWriteFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>> (window, (float)spp, devTerminatedRays, devFrameBuf);
 
+}
+
+
+__global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool) {
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (idx >= rayNum) return;
+
+	//todo
+
+	Path p = rayPool[idx];
+	if (p.lastHit < 0) {
+		glm::vec3 dir = glm::normalize(p.ray.dir);
+		vecTransform2(&dir, getRotationMat(rotate));
+
+		//float theta = glm::acos(glm::dot(dir, up));
+		float cosPhi = glm::dot(dir, right);
+		float sinPhi = glm::length(glm::cross(dir, right));
+
+		//float v = glm::clamp(theta * INV_PI, 0.f, 1.f);
+		//float u = glm::clamp(0.5f+phi * INV_PI, 0.f, 1.f);
+		float v = glm::dot(dir, up);
+		float u;
+		if (sinPhi > 0) {
+			u = 0.5f * cosPhi;
+		}
+		else u = 1.f - 0.5f * cosPhi;
+		float4 texColor = tex2D<float4>(skybox, u, v);
+		p.color *= glm::vec3{ texColor.x, texColor.y, texColor.z };
+
+		p.lastHit = 1;
+		p.remainingBounces = 0;
+
+		rayPool[idx] = p;
+	}
+}
+
+void PathTracer::shadeWithSkybox() {
+	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
+	kernShadeWithSkybox <<<blocksPerGrid, BLOCK_SIZE>>> (
+		window.pixels, scene.skybox.devTexture, { 0.f, 0.f, 0.f }, scene.cam.upDir, { 1.f, 0.f, 0.f }, devTerminatedRays);
+}
+
+__global__ void kernGenerateGbufferWithSkybox(
+	int rayNum, float currentSpp, cudaTextureObject_t skybox, glm::vec3 up, glm::vec3 right, Path* rayPool, float* albedoBuf) {
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (idx >= rayNum) return;
+}
+void PathTracer::generateGbufferWithSkybox() {
+	//todo
 }
 
 std::unique_ptr<float[]> PathTracer::getFrameBuffer() {
