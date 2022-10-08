@@ -35,6 +35,8 @@ The scene is defined by a JSON file. It is very self-explanatory and contains re
 
 ## Gallery
 
+![](./doc/staircase.png)
+
 ![](./doc/result1.png)
 
 ![](./doc/result2.png)
