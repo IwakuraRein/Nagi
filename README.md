@@ -55,7 +55,7 @@ The scene is defined by a JSON file. It is very self-explanatory and contains re
 
 ## Oct-tree
 
-To accelerate the intersection test. I divide each model's triangles and store them in oct-tree structures. Then all objects will be passed into the denoiser in an array sorted by their volume. The path tracer will perform a depth-first search in the intersection test.
+To accelerate the intersection test. I divide each model's triangles and store them in oct-tree structures. Then all objects will be passed into the path tracer in an array sorted by their volume. The path tracer will perform a depth-first search in the intersection test.
 The triangle intersected with the shortest distance will be recorded. If the distance to an object is larger than the last recorded distance to the triangle, all its triangles will be surpassed.
 
 ## Performance Analysis
