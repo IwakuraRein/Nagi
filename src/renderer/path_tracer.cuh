@@ -62,8 +62,8 @@ __global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* 
 __global__ void kernGenerateGbuffer(
 	int rayNum, float currentSpp, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
 __global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool);
-__global__ void kernGenerateGbufferWithSkybox(
-	int rayNum, float currentSpp, cudaTextureObject_t skybox, glm::vec3 up, glm::vec3 right, Path* rayPool, float* albedoBuf);
+__global__ void kernGenerateSkyboxAlbedo(
+	int rayNum, float currentSpp, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool, float* albedoBuf);
 
 class PathTracer {
 public:
@@ -84,6 +84,7 @@ public:
 	int shade(int rayNum, int spp);
 
 	void generateGbuffer(int rayNum, int spp);
+	void generateSkyboxAlbedo(int rayNum, int spp);
 
 	// delete rays whose flag is negetive
 	int compactRays(int rayNum, Path* rayPool, Path* compactedRayPool);
@@ -93,7 +94,6 @@ public:
 	void writeFrameBuffer(int spp);
 
 	void shadeWithSkybox();
-	void generateGbufferWithSkybox();
 
 	bool finish() const { return spp > scene.config.spp; }
 

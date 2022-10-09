@@ -201,7 +201,6 @@ void SceneLoader::loadMaterials() {
 			}
 
 			if (hasItem(items, "roughness texture")) {
-				auto hehe = items["roughness texture"];
 				std::string texName{ items["roughness texture"] };
 				texName = "roughness" + texName; // encoding texture's path with its type
 				if (!hasItem(textures, texName)) {

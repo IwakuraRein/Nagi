@@ -126,7 +126,7 @@ void PathTracer::iterate() {
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>> (window, spp, devRayPool1, scene.config.maxBounce, scene.cam);
 	checkCUDAError("kernInitializeRays failed.");
-	bool firstIntersection = true;
+	bool firstIntersection{ true };
 	int remainingRays = window.pixels;
 	while (true) {
 		remainingRays = intersectionTest(remainingRays);
@@ -137,10 +137,10 @@ void PathTracer::iterate() {
 		//sortRays(remainingRays);
 
 		if (firstIntersection) {
-			generateGbuffer(remainingRays, spp);
 			if (scene.hasSkyBox) {
-				generateGbufferWithSkybox();
+				generateSkyboxAlbedo(window.pixels - remainingRays, spp);
 			}
+			generateGbuffer(remainingRays, spp);
 			firstIntersection = false;
 		}
 
@@ -148,9 +148,9 @@ void PathTracer::iterate() {
 		//std::cout << remainingRays << std::endl;
 		if (remainingRays <= 0) break;
 	}
-	//if (scene.hasSkyBox) {
-	//	shadeWithSkybox();
-	//}
+	if (scene.hasSkyBox) {
+		shadeWithSkybox();
+	}
 	writeFrameBuffer(spp);
 	terminatedRayNum = 0;
 	float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
@@ -784,18 +784,8 @@ __global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm:
 		glm::vec3 dir = glm::normalize(p.ray.dir);
 		vecTransform2(&dir, getRotationMat(rotate));
 
-		//float theta = glm::acos(glm::dot(dir, up));
-		float cosPhi = glm::dot(dir, right);
-		float sinPhi = glm::length(glm::cross(dir, right));
-
-		//float v = glm::clamp(theta * INV_PI, 0.f, 1.f);
-		//float u = glm::clamp(0.5f+phi * INV_PI, 0.f, 1.f);
-		float v = glm::dot(dir, up);
-		float u;
-		if (sinPhi > 0) {
-			u = 0.5f * cosPhi;
-		}
-		else u = 1.f - 0.5f * cosPhi;
+		float u = glm::fract(glm::atan(dir.z, dir.x) * INV_TWO_PI + 1.f);
+		float v = glm::atan(glm::length(glm::vec2(dir.x, dir.z)), dir.y) * INV_PI;
 		float4 texColor = tex2D<float4>(skybox, u, v);
 		p.color *= glm::vec3{ texColor.x, texColor.y, texColor.z };
 
@@ -812,13 +802,28 @@ void PathTracer::shadeWithSkybox() {
 		window.pixels, scene.skybox.devTexture, { 0.f, 0.f, 0.f }, scene.cam.upDir, { 1.f, 0.f, 0.f }, devTerminatedRays);
 }
 
-__global__ void kernGenerateGbufferWithSkybox(
-	int rayNum, float currentSpp, cudaTextureObject_t skybox, glm::vec3 up, glm::vec3 right, Path* rayPool, float* albedoBuf) {
+__global__ void kernGenerateSkyboxAlbedo(
+	int rayNum, float currentSpp, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool, float* albedoBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
+
+	Path p = rayPool[idx];
+	if (p.lastHit < 0) {
+		glm::vec3 dir = glm::normalize(p.ray.dir);
+		vecTransform2(&dir, getRotationMat(rotate));
+		float u = glm::fract(glm::atan(dir.z, dir.x) * INV_TWO_PI + 1.f);
+		float v = glm::atan(glm::length(glm::vec2(dir.x, dir.z)), dir.y) * INV_PI;
+		float4 texColor = tex2D<float4>(skybox, u, v);
+		glm::vec3 albedo = glm::vec3{ texColor.x, texColor.y, texColor.z };
+		albedoBuf[p.pixelIdx * 3] = (albedoBuf[p.pixelIdx * 3] * (currentSpp - 1.f) + albedo.x) / currentSpp;
+		albedoBuf[p.pixelIdx * 3+1] = (albedoBuf[p.pixelIdx * 3 + 1] * (currentSpp - 1.f) + albedo.y) / currentSpp;
+		albedoBuf[p.pixelIdx * 3 + 2] = (albedoBuf[p.pixelIdx * 3 + 2] * (currentSpp - 1.f) + albedo.z) / currentSpp;
+	}
 }
-void PathTracer::generateGbufferWithSkybox() {
-	//todo
+void PathTracer::generateSkyboxAlbedo(int rayNum, int spp) {
+	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
+	kernGenerateSkyboxAlbedo<<<blocksPerGrid, BLOCK_SIZE>>>(
+		window.pixels, (float)spp, scene.skybox.devTexture, { 0.f, 0.f, 0.f }, scene.cam.upDir, { 1.f, 0.f, 0.f }, devTerminatedRays, devAlbedoBuf);
 }
 
 std::unique_ptr<float[]> PathTracer::getFrameBuffer() {

@@ -23,11 +23,14 @@ Nagi is a simple path tracer built in CUDA. As shown in the picture, it's capabl
 - [x] Denoiser
 - [x] Oct-tree Structure
 - [x] Refrection
+- [x] Skybox
 
 **Working On**
 
-- [ ] Skybox
 - [ ] Preview Window
+- [ ] Pre-filtered Skybox
+- [ ] Multiple Importance Sampling
+- [ ] Better BVH Algorithms
 
 ## Usage
 
@@ -46,6 +49,8 @@ The scene is defined by a JSON file. It is very self-explanatory and contains re
 ## Gallery
 
 ![](./doc/staircase.png)
+
+![](./doc/cannon.png)
 
 ![](./doc/result1.png)
 
@@ -68,7 +73,11 @@ However, when a mesh is rectangular and contain large triangles, like this mesh 
 
 ![](./doc/stair_case_mesh.png)
 
-The time cost for the Staircase scene increases to 8 seconds per spp. In general, the time cost of 1 spp varies from 0.2-2 seconds.
+The time cost for the Staircase scene increases to 8 seconds per spp. On the other hand, the time cost for the Cannon scene is only 0.2 second since its meshes are rounded and containing small triangles:
+
+![](./doc/cannon_mesh.png)
+
+In general, the time cost of 1 spp varies from 0.2-2 seconds.
 
 The performance slightly drops if rays are sorted according to their materials after the intersection. The stable sort function itself is costly so the improvement may be counteracted.
 
