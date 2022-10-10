@@ -28,7 +28,7 @@ Nagi is a simple path tracer built in CUDA. As shown in the picture, it's capabl
 **Working On**
 
 - [ ] Preview Window
-- [ ] Pre-filtered Skybox
+- [ ] Importance Sampling On Skybox
 - [ ] Multiple Importance Sampling
 - [ ] Better BVH Algorithms
 
@@ -73,7 +73,7 @@ However, when a mesh is rectangular and contain large triangles, like this mesh 
 
 ![](./doc/stair_case_mesh.png)
 
-The time cost for the Staircase scene increases to 8 seconds per spp. On the other hand, the time cost for the Cannon scene is only 0.2 second since its meshes are rounded and containing small triangles:
+The time cost for the Staircase scene increases to 8 seconds per spp. On the other hand, the time cost for the Cannon scene is only 0.2 second despite having 83,000 triangles. Its meshes are rounded and containing small triangles:
 
 ![](./doc/cannon_mesh.png)
 
