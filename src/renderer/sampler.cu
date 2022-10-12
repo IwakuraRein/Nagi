@@ -65,54 +65,44 @@ __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& normal, floa
     return glm::normalize(T * wo_tan.x + B * wo_tan.y + normal * wo_tan.z);
 }
 
-__device__ __host__ glm::vec3 refractionSampler(float iorI, float iorT, const glm::vec3& wi, const glm::vec3& n, float* F) {
-    glm::vec3 ni, nt;
-    if (glm::dot(wi, n) > 0.f) {
-        ni = -n;
-        nt = n;
+__device__ __host__ glm::vec3 refractionSampler(float ior, const glm::vec3& wi, glm::vec3 n, float rnd) {
+    float invEta, iorI, iorT;
+    float cosI = glm::dot(wi, n);
+    if (cosI < 0) { // enter
+        cosI = -cosI;
+        n = -n;
+        invEta = 1.f / ior;
+        iorI = 1.f;
+        iorT = ior;
+    }
+    else { // leave
+        n = n;
+        invEta = ior;
+        iorI = ior;
+        iorT = 1.f;
+    }
+
+    float cosT = 1.f - invEta * invEta * fmaxf(0.f, (1.f - cosI * cosI));
+    if (cosT <= 0.f) { // internal reflection
+        return glm::reflect(wi, -n);
     }
     else {
-        ni = n;
-        nt = -n;
+        float r1, r2, F;
+        cosT = sqrtf(cosT);
+        float ti = iorT * cosI;
+        float it = iorI * cosT;
+        float tt = iorT * cosT;
+        float ii = iorI * cosI;
+        r1 = (ti - it) / (ti + it);
+        r2 = (ii - tt) / (ii + tt);
+
+        F = 0.5f * (r1 * r1 + r2 * r2);
+
+        if (rnd < F) {
+            return glm::reflect(wi, -n);
+        }
+        return wi * invEta + n * (cosT - invEta * cosI);
     }
-    glm::vec3 wt = glm::refract(wi, ni, iorI / iorT);
-    float cosi = glm::dot(wi, ni);
-    float cost = glm::dot(wt, nt);
-    float ti = iorT * cosi;
-    float it = iorI * cost;
-    float tt = iorT * cost;
-    float ii = iorI * cosi;
-    float r1 = (ti - it) / (ti + it);
-    float r2 = (ii - tt) / (ii + tt);
-    *F = 0.5f * (r1 * r1 + r2 * r2);
-    return wt;
-}
-
-__device__ __host__ glm::vec3 refractionSampler(float ior, const glm::vec3& wi, const glm::vec3& ni, float* F, bool enter) {
-    glm::vec3 nt{ -ni }, wt;
-    float r1, r2;
-    float eta = enter? 1.f / ior : ior;
-    float iorI = enter ? 1.f : ior;
-    float iorT = enter ? ior : 1.f;
-
-    float dotValue(glm::dot(wi, ni));
-    float k(1.f - eta * eta * (1.f - dotValue * dotValue));
-    if (k > 0) wt = eta * wi - (eta * dotValue + sqrtf(k)) * ni;
-    else {
-        *F = FLT_MAX;
-        return ni;
-    }
-    float cosi = glm::dot(-wi, ni);
-    float cost = glm::dot(wt, nt);
-    float ti = iorT * cosi;
-    float it = iorI * cost;
-    float tt = iorT * cost;
-    float ii = iorI * cosi;
-    r1 = (ti - it) / (ti + it);
-    r2 = (ii - tt) / (ii + tt);
-
-    *F = 0.5f * (r1 * r1 + r2 * r2);
-    return wt;
 }
 
 __device__ __host__ glm::vec3 uniformHemisphereSampler(const glm::vec3& normal, float* pdf, float rnd1, float rnd2) {

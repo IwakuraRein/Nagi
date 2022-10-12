@@ -476,11 +476,11 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 						attrib.vertices[3 * vertInfo0.vertex_index + 1],
 						attrib.vertices[3 * vertInfo0.vertex_index + 2],
 				};
-				trig.vert0.normal = {
+				trig.vert0.normal = glm::normalize(glm::vec3 {
 						attrib.normals[3 * vertInfo0.normal_index + 0],
 						attrib.normals[3 * vertInfo0.normal_index + 1],
 						attrib.normals[3 * vertInfo0.normal_index + 2],
-				};
+				});
 				trig.vert0.uv = {
 						attrib.texcoords[2 * vertInfo0.texcoord_index + 0],
 						1.f - attrib.texcoords[2 * vertInfo0.texcoord_index + 1]
@@ -490,11 +490,11 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 						attrib.vertices[3 * vertInfo1.vertex_index + 1],
 						attrib.vertices[3 * vertInfo1.vertex_index + 2],
 				};
-				trig.vert1.normal = {
+				trig.vert1.normal = glm::normalize(glm::vec3{
 						attrib.normals[3 * vertInfo1.normal_index + 0],
 						attrib.normals[3 * vertInfo1.normal_index + 1],
 						attrib.normals[3 * vertInfo1.normal_index + 2],
-				};
+				});
 				trig.vert1.uv = {
 						attrib.texcoords[2 * vertInfo1.texcoord_index + 0],
 						1.f - attrib.texcoords[2 * vertInfo1.texcoord_index + 1]
@@ -504,11 +504,11 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 						attrib.vertices[3 * vertInfo2.vertex_index + 1],
 						attrib.vertices[3 * vertInfo2.vertex_index + 2],
 				};
-				trig.vert2.normal = {
+				trig.vert2.normal = glm::normalize(glm::vec3{
 						attrib.normals[3 * vertInfo2.normal_index + 0],
 						attrib.normals[3 * vertInfo2.normal_index + 1],
 						attrib.normals[3 * vertInfo2.normal_index + 2],
-				};
+				});
 				trig.vert2.uv = {
 						attrib.texcoords[2 * vertInfo2.texcoord_index + 0],
 						1.f - attrib.texcoords[2 * vertInfo2.texcoord_index + 1]

@@ -4,7 +4,7 @@
 #include "common.cuh"
 #include "path_tracer.cuh"
 
-#define FILTER_SIZE 17
+#define FILTER_SIZE 5
 #define FILTER_SIZE_HALF 8
 #define FILTER_SIZE_SQUARE 289
 
@@ -16,7 +16,7 @@ __global__ void kernRetrieveColor(WindowSize window, float* luminance, float* al
 // 17x17 bilateral filter
 // reference: https://dl.acm.org/doi/10.1145/3105762.3105770; http://diglib.eg.org/handle/10.2312/EGGH.HPG10.067-075
 __global__ void kernBilateralFilter(
-	WindowSize window, float* denoised, float* luminance, float* normal, float* depth, float sigmaN, float sigmaD, float sigmaL);
+	WindowSize window, int dilation, float* denoised, float* luminance, float* normal, float* depth, float sigmaN, float sigmaD, float sigmaL);
 
 class Denoiser {
 public:

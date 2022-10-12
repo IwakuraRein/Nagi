@@ -8,6 +8,9 @@
 #include "bsdf.cuh"
 
 #define PDF_EPSILON 0.0001f
+#define MAX_GBUFFER_BOUNCE 8
+#define REFLECT_OFFSET 0.0002f
+#define REFRACT_OFFSET 0.001f
 
 namespace nagi {
 
@@ -60,7 +63,8 @@ __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo
 __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* rayPool, float* frameBuffer);
 __global__ void kernGenerateGbuffer(
-	int rayNum, float currentSpp, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
+	int rayNum, float currentSpp, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf,
+	float* currentAlbedoBuf, /*float* currentNormalBuf, */float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
 __global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool);
 __global__ void kernGenerateSkyboxAlbedo(
 	int rayNum, float currentSpp, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool, float* albedoBuf);
@@ -83,7 +87,7 @@ public:
 	// compute color and generate new rays
 	int shade(int rayNum, int spp);
 
-	void generateGbuffer(int rayNum, int spp);
+	void generateGbuffer(int rayNum, int spp, int bounce);
 	void generateSkyboxAlbedo(int rayNum, int spp);
 
 	// delete rays whose flag is negetive
@@ -126,6 +130,9 @@ public:
 	float* devNormalBuf{ nullptr };
 	float* devAlbedoBuf{ nullptr };
 	float* devDepthBuf{ nullptr };
+	//float* devCurrentNormalBuf{ nullptr };
+	float* devCurrentAlbedoBuf{ nullptr };
+	float* devCurrentDepthBuf{ nullptr };
 };
 
 }

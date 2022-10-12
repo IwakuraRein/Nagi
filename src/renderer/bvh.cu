@@ -80,23 +80,15 @@ int BVH::buildNode(
 
 		// prepare children's bounding boxes
 
-		BoundingBox b0{}; updateBoundingBox(bbox.min, bbox.center, &b0);
-		BoundingBox b1{}; updateBoundingBox(b0.min + halfZ, b0.max + halfZ, &b1);
-		BoundingBox b2{}; updateBoundingBox(b0.min + halfY, b0.max + halfY, &b2);
-		BoundingBox b3{}; updateBoundingBox(b0.min + halfY + halfZ, b0.max + halfY + halfZ, &b3);
+		BoundingBox b0{}; updateBoundingBox(bbox.min - eps, bbox.center + eps, &b0);
+		BoundingBox b1{}; updateBoundingBox(b0.min + halfZ - eps, b0.max + halfZ + eps, &b1);
+		BoundingBox b2{}; updateBoundingBox(b0.min + halfY - eps, b0.max + halfY + eps, &b2);
+		BoundingBox b3{}; updateBoundingBox(b0.min + halfY + halfZ - eps, b0.max + halfY + halfZ + eps, &b3);
 
-		BoundingBox b4{}; updateBoundingBox(b0.min + halfX, b0.max + halfX, &b4);
-		BoundingBox b5{}; updateBoundingBox(b4.min + halfZ, b4.max + halfZ, &b5);
-		BoundingBox b6{}; updateBoundingBox(b4.min + halfY, b4.max + halfY, &b6);
-		BoundingBox b7{}; updateBoundingBox(b4.min + halfY + halfZ, b4.max + halfY + halfZ, &b7);
-		b0.min -= eps; b0.max += eps;
-		b1.min -= eps; b1.max += eps;
-		b2.min -= eps; b2.max += eps;
-		b3.min -= eps; b3.max += eps;
-		b4.min -= eps; b4.max += eps;
-		b5.min -= eps; b5.max += eps;
-		b6.min -= eps; b6.max += eps;
-		b7.min -= eps; b7.max += eps;
+		BoundingBox b4{}; updateBoundingBox(b0.min + halfX - eps, b0.max + halfX + eps, &b4);
+		BoundingBox b5{}; updateBoundingBox(b4.min + halfZ - eps, b4.max + halfZ + eps, &b5);
+		BoundingBox b6{}; updateBoundingBox(b4.min + halfY - eps, b4.max + halfY + eps, &b6);
+		BoundingBox b7{}; updateBoundingBox(b4.min + halfY + halfZ - eps, b4.max + halfY + halfZ + eps, &b7);
 
 		// store children's triangles
 		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs0 = std::make_shared<std::list<std::pair<int, Triangle*>>>();

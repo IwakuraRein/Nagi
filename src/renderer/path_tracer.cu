@@ -39,6 +39,12 @@ void PathTracer::allocateBuffers() {
 	checkCUDAError("cudaMalloc devAlbedoBuf failed.");
 	cudaMalloc((void**)&devDepthBuf, sizeof(float) * window.pixels);
 	checkCUDAError("cudaMalloc devDepthBuf failed.");
+	//cudaMalloc((void**)&devCurrentNormalBuf, sizeof(float) * window.pixels * 3);
+	//checkCUDAError("cudaMalloc devCurrentNormalBuf failed.");
+	cudaMalloc((void**)&devCurrentAlbedoBuf, sizeof(float) * window.pixels * 3);
+	checkCUDAError("cudaMalloc devCurrentAlbedoBuf failed.");
+	cudaMalloc((void**)&devCurrentDepthBuf, sizeof(float) * window.pixels);
+	checkCUDAError("cudaMalloc devCurrentDepthBuf failed.");
 	cudaMalloc((void**)&devRayPool1, window.pixels * sizeof(Path));
 	checkCUDAError("cudaMalloc devRayPool1 failed.");
 	cudaMalloc((void**)&devRayPool2, window.pixels * sizeof(Path));
@@ -112,6 +118,21 @@ void PathTracer::destroyBuffers() {
 		checkCUDAError("cudaFree devDepthBuf failed.");
 		devDepthBuf = nullptr;
 	}
+	//if (devCurrentNormalBuf) {
+	//	cudaFree(devCurrentNormalBuf);
+	//	checkCUDAError("cudaFree devCurrentNormalBuf failed.");
+	//	devCurrentNormalBuf = nullptr;
+	//}
+	if (devCurrentAlbedoBuf) {
+		cudaFree(devCurrentAlbedoBuf);
+		checkCUDAError("cudaFree devCurrentAlbedoBuf failed.");
+		devCurrentAlbedoBuf = nullptr;
+	}
+	if (devCurrentDepthBuf) {
+		cudaFree(devCurrentDepthBuf);
+		checkCUDAError("cudaFree devCurrentDepthBuf failed.");
+		devCurrentDepthBuf = nullptr;
+	}
 }
 
 PathTracer::~PathTracer() {
@@ -126,22 +147,22 @@ void PathTracer::iterate() {
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>> (window, spp, devRayPool1, scene.config.maxBounce, scene.cam);
 	checkCUDAError("kernInitializeRays failed.");
-	bool firstIntersection{ true };
+	int bounce = 0;
 	int remainingRays = window.pixels;
 	while (true) {
 		remainingRays = intersectionTest(remainingRays);
+		bounce++;
 
 		//std::cout << remainingRays << " ";
 		if (remainingRays <= 0) break;
 
 		//sortRays(remainingRays);
 
-		if (firstIntersection) {
-			if (scene.hasSkyBox) {
-				generateSkyboxAlbedo(window.pixels - remainingRays, spp);
-			}
-			generateGbuffer(remainingRays, spp);
-			firstIntersection = false;
+		if (bounce == 1 && scene.hasSkyBox) {
+			generateSkyboxAlbedo(window.pixels - remainingRays, spp);
+		}
+		if (bounce <= MAX_GBUFFER_BOUNCE) {
+			generateGbuffer(remainingRays, spp, bounce);
 		}
 
 		remainingRays = shade(remainingRays, spp);
@@ -191,8 +212,8 @@ __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStar
 	result.normal = pickedNormal;
 	result.tangent = pickedTangent;
 	result.uv = pickedUV;
-	//result.position = r.origin + r.dir * (minDist - 0.001f);
-	r.origin = r.origin + r.dir * (minDist - 0.001f);
+	result.position = r.origin + r.dir * (minDist - REFLECT_OFFSET);
+	//r.origin = r.origin + r.dir * (minDist - REFLECT_OFFSET);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
 	out[idx] = result;
 }
@@ -236,8 +257,8 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 	result.normal = pickedNormal;
 	result.tangent = pickedTangent;
 	result.uv = pickedUV;
-	result.position = r.origin + r.dir * (minDist - 0.001f);
-	//r.origin = r.origin + r.dir * (minDist - 0.001f);
+	result.position = r.origin + r.dir * (minDist - REFLECT_OFFSET);
+	//r.origin = r.origin + r.dir * (minDist - REFLECT_OFFSET);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
 	out[idx] = result;
 
@@ -319,8 +340,8 @@ __global__ void kernBVHIntersectTest(
 	result.normal = pickedNormal;
 	result.tangent = pickedTangent;
 	result.uv = pickedUV;
-	result.position = r.origin + r.dir * (minTrigD - 0.001f);
-	//r.origin = r.origin + r.dir * (minTrigD - 0.001f);
+	result.position = r.origin + r.dir * (minTrigD - REFLECT_OFFSET);
+	//r.origin = r.origin + r.dir * (minTrigD - REFLECT_OFFSET);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
 	out[idx] = result;
 }
@@ -352,17 +373,23 @@ void PathTracer::sortRays(int rayNum) {
 	checkCUDAError("thrust::stable_sort failed.");
 }
 
+// blend the gbuffer (normal and albedo) is good for denoising. 
+// reference: https://github.com/tunabrain/tungsten/issues/69
 __global__ void kernGenerateGbuffer(
-	int rayNum, float currentSpp, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
+	int rayNum, float currentSpp, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, 
+	float* currentAlbedoBuf, /*float* currentNormalBuf, */float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
 	Path p = rayPool[idx];
+	if (p.gbufferStored) return;
 	int pixel = p.pixelIdx;
 	IntersectInfo intersect = intersections[idx];
 	Material mtl = mtlBuf[intersect.mtlIdx];
 
 	glm::vec3 normal;
+	glm::vec3 albedo;
+	float depth = glm::length(intersect.position - p.ray.origin);
 	if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
 		glm::mat3 TBN = glm::mat3(intersect.tangent, glm::cross(intersect.normal, intersect.tangent), intersect.normal);
 		float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersect.uv.x, intersect.uv.y);
@@ -372,29 +399,123 @@ __global__ void kernGenerateGbuffer(
 	}
 	else normal = intersect.normal;
 
-	glm::vec3 albedo;
 	if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
 		float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersect.uv.x, intersect.uv.y);
 		albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
 	}
 	else albedo = mtl.albedo;
 
-	float depth = glm::length(intersect.position - camPos);
+	if (bounce == 1) {
+		if (/*mtl.type == MTL_TYPE_GLASS || */mtl.type == MTL_TYPE_MIRROR)
+			p.type = PIXEL_TYPE_SPECULAR;
+		if (mtl.type == MTL_TYPE_MICROFACET) {
+			if (!hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS) && mtl.roughness <= 0.1f) {
+				p.type = PIXEL_TYPE_GLOSSY;
+			}
+			else if (hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS)) {
+				if (tex2D<float>(mtl.roughnessTex.devTexture, intersect.uv.x, intersect.uv.y) <= 0.1f) {
+					p.type = PIXEL_TYPE_GLOSSY;
+				}
+			}
+		}
+		if (mtl.type == MTL_TYPE_GLASS) p.type = PIXEL_TYPE_GLOSSY;
 
-	// blend the gbuffer is good for denoising. 
-	// reference: https://github.com/tunabrain/tungsten/issues/69
-	normalBuf[pixel * 3] = (normalBuf[pixel * 3]*(currentSpp - 1.f) + normal.x) / currentSpp;
-	normalBuf[pixel * 3+1] = (normalBuf[pixel * 3+1]*(currentSpp - 1.f) + normal.y) / currentSpp;
-	normalBuf[pixel * 3+2] = (normalBuf[pixel * 3+2]*(currentSpp - 1.f) + normal.z) / currentSpp;
-	albedoBuf[pixel * 3] = (albedoBuf[pixel * 3]*(currentSpp - 1.f) + albedo.x) / currentSpp;
-	albedoBuf[pixel * 3+1] = (albedoBuf[pixel * 3+1]*(currentSpp - 1.f) + albedo.y) / currentSpp;
-	albedoBuf[pixel * 3+2] = (albedoBuf[pixel * 3+2]*(currentSpp - 1.f) + albedo.z) / currentSpp;
-	depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
+		if (p.type == PIXEL_TYPE_SPECULAR) {
+			currentAlbedoBuf[pixel * 3] = albedo.x;
+			currentAlbedoBuf[pixel * 3 + 1] = albedo.y;
+			currentAlbedoBuf[pixel * 3 + 2] = albedo.z;
+			currentDepthBuf[pixel] = depth;
+		}
+		else if (p.type == PIXEL_TYPE_GLOSSY) {
+			currentAlbedoBuf[pixel * 3] = albedo.x;
+			currentAlbedoBuf[pixel * 3 + 1] = albedo.y;
+			currentAlbedoBuf[pixel * 3 + 2] = albedo.z;
+			currentDepthBuf[pixel] = depth;
+
+			normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
+			normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
+			normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
+		}
+		else {
+			p.type == PIXEL_TYPE_DIFFUSE;
+			p.gbufferStored = true;
+			albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + albedo.x) / currentSpp;
+			albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + albedo.y) / currentSpp;
+			albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + albedo.z) / currentSpp;
+
+			depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
+
+			normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
+			normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
+			normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
+		}
+
+		rayPool[idx] = p;
+	}
+
+	else {
+		if (p.type == PIXEL_TYPE_GLOSSY) {
+			bool hitDiffuse{ false };
+
+			if (mtl.type == MTL_TYPE_LAMBERT || mtl.type == MTL_TYPE_LIGHT_SOURCE) {
+				hitDiffuse = true;
+				rayPool[idx] = p;
+			}
+			if (mtl.type == MTL_TYPE_MICROFACET) {
+				if (!hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS) && mtl.roughness > 0.1f) {
+					hitDiffuse = true;
+					rayPool[idx] = p;
+				}
+				else if (hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS)) {
+					if (tex2D<float>(mtl.roughnessTex.devTexture, intersect.uv.x, intersect.uv.y) > 0.1f) {
+						hitDiffuse = true;
+						rayPool[idx] = p;
+					}
+				}
+			}
+			if (hitDiffuse) {
+				p.gbufferStored = true;
+				rayPool[idx] = p;
+				albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3] * albedo.x) / currentSpp;
+				albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 1] * albedo.y) / currentSpp;
+				albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 2] * albedo.z) / currentSpp;
+
+				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + currentDepthBuf[pixel] + depth) / currentSpp;
+			}
+			else {
+				currentAlbedoBuf[pixel * 3] *= albedo.x;
+				currentAlbedoBuf[pixel * 3 + 1] *= albedo.y;
+				currentAlbedoBuf[pixel * 3 + 2] *= albedo.z;
+				currentDepthBuf[pixel] += depth;
+			}
+		}
+		if (p.type == PIXEL_TYPE_SPECULAR) {
+			if (mtl.type != MTL_TYPE_MIRROR/* && mtl.type != MTL_TYPE_GLASS*/) {
+				p.gbufferStored = true;
+				rayPool[idx] = p;
+				albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3] * albedo.x) / currentSpp;
+				albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 1] * albedo.y) / currentSpp;
+				albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 2] * albedo.z) / currentSpp;
+
+				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + currentDepthBuf[pixel] + depth) / currentSpp;
+
+				normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
+				normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
+				normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
+			}
+			else {
+				currentAlbedoBuf[pixel * 3] *= albedo.x;
+				currentAlbedoBuf[pixel * 3 + 1] *= albedo.y;
+				currentAlbedoBuf[pixel * 3 + 2] *= albedo.z;
+				currentDepthBuf[pixel] += depth;
+			}
+		}
+	}
 }
-void PathTracer::generateGbuffer(int rayNum, int spp) {
+void PathTracer::generateGbuffer(int rayNum, int spp, int bounce) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernGenerateGbuffer<<<blocksPerGrid, BLOCK_SIZE >> > (
-		rayNum, (float)spp, scene.cam.position, devRayPool1, devResults1, devMtlBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
+		rayNum, (float)spp, bounce, scene.cam.position, devRayPool1, devResults1, devMtlBuf, devCurrentAlbedoBuf, devCurrentDepthBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
 }
 
 
@@ -534,7 +655,6 @@ __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo
 		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 		glm::vec3 normal, albedo;
 		glm::vec3 wo;
-		float f;
 		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
 			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
 			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
@@ -551,20 +671,8 @@ __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo
 
 		p.color = p.color * albedo;
 
-		bool enter{ true };
-		if (glm::dot(p.ray.dir, normal) > 0.f) {
-			enter = false;
-			normal = -normal;
-		}
-		//float aaa = glm::dot(p.ray.dir, normal);
-		wo = refractionSampler(mtl.ior, p.ray.dir, normal, &f, &enter);
-		//float bbb = glm::dot(p.ray.dir, wo);
-		//printf("%f %f %f %f\n", mtl.ior, aaa, bbb, f);
-		float r = u01(rng);
-		if (r < f) { //reflect
-			wo = glm::reflect(p.ray.dir, normal);
-		}
-		p.ray.origin += wo * 0.002f;
+		wo = refractionSampler(mtl.ior, p.ray.dir, normal, u01(rng));
+		p.ray.origin += wo * REFRACT_OFFSET;
 		p.ray.dir = wo;
 		p.ray.invDir = 1.f / wo;
 		p.remainingBounces--;
@@ -629,7 +737,7 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, Intersec
 		if (r > s) wo = wo2;
 		pdf = s * pdf + (1.f - s) * pdf2;
 
-		if (glm::dot(wo, normal) <= 0.001f || pdf < PDF_EPSILON) {
+		if (glm::dot(wo, normal) <= FLT_EPSILON || pdf < PDF_EPSILON) {
 			p.color = glm::vec3{ 0.f };
 			p.remainingBounces = 0;
 		}
@@ -710,7 +818,7 @@ __global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, in
 	thrust::default_random_engine rng = makeSeededRandomEngine(spp, idx, 0);
 	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 
-	Path path;
+	Path path{};
 	path.pixelIdx = idx;
 	path.remainingBounces = maxBounce;
 	path.ray.origin = cam.position;
@@ -727,6 +835,8 @@ __global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, in
 
 	float rnd1 = u01(rng) - 0.5f;
 	float rnd2 = u01(rng) - 0.5f;
+	//float rnd1 = 0.f;
+	//float rnd2 = 0.f;
 
 	glm::vec3 lookAt = cam.filmOrigin
 		- cam.upDir * (((float)py + rnd1) * cam.pixelHeight + cam.halfPixelHeight)

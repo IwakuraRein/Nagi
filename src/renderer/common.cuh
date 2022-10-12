@@ -44,6 +44,10 @@
 #define MTL_TYPE_MIRROR 3
 #define MTL_TYPE_LIGHT_SOURCE 4
 
+#define PIXEL_TYPE_DIFFUSE  0
+#define PIXEL_TYPE_GLOSSY   1
+#define PIXEL_TYPE_SPECULAR 2
+
 #define DENOISER_TYPE_NONE 0
 #define DENOISER_TYPE_FILTER 1
 #define DENOISER_TYPE_OIDN 2
@@ -262,6 +266,8 @@ struct Ray {
 
 struct Path {
 	Ray ray;
+	int type{ PIXEL_TYPE_DIFFUSE };
+	bool gbufferStored{ false };
 	glm::vec3 color;
 	int remainingBounces;
 	int pixelIdx;

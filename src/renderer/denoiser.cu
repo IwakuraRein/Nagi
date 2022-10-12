@@ -59,7 +59,7 @@ __global__ void kernRetrieveColor(WindowSize window, float* luminance, float* al
 
 //todo: optimization with shared memeory
 __global__ void nagi::kernBilateralFilter(
-	WindowSize window, float* denoised, float* luminance, float* normal, float* depth, float sigmaN, float sigmaZ, float sigmaL) {
+	WindowSize window, int dilation, float* denoised, float* luminance, float* normal, float* depth, float sigmaN, float sigmaZ, float sigmaL) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= window.pixels) return;
 
@@ -79,7 +79,7 @@ __global__ void nagi::kernBilateralFilter(
 	for (int i = -FILTER_SIZE_HALF; i <= FILTER_SIZE_HALF; i++) {
 #pragma unroll
 		for (int j = -FILTER_SIZE_HALF; j <= FILTER_SIZE_HALF; j++) {
-			int p = window.width * (py + i) + px + j;
+			int p = window.width * (py + i * dilation) + px + j * dilation;
 			if (p == idx) {
 				out += thisL;
 				wSum += 1.f;
@@ -95,7 +95,7 @@ __global__ void nagi::kernBilateralFilter(
 					__expf(-fabsf(thisL.x - l.x) / sigmaL + wz_tmp),
 					__expf(-fabsf(thisL.y - l.y) / sigmaL + wz_tmp),
 					__expf(-fabsf(thisL.z - l.z) / sigmaL + wz_tmp) };
-				w = w * wn/* * devGaussianKernel[i]*/ / (fabsf(i) + fabsf(j));
+				w = w * wn/* * devGaussianKernel[i]*/ / (fabsf(i * dilation) + fabsf(j * dilation));
 				out += w * l;
 				wSum += w;
 			}
@@ -114,10 +114,16 @@ std::unique_ptr<float[]> Denoiser::bilateralFilter(float* frameBuf, float* albed
 	kernGenerateLuminance<<<blocksPerGrid, BLOCK_SIZE>>>(window, frameBuf, albedoBuf);
 	checkCUDAError("kernGenerateLuminance failed.");
 
-	kernBilateralFilter <<<blocksPerGrid, BLOCK_SIZE >>>(window, devDenoised, frameBuf, normalBuf, depthBuf, 64.f, 1.f, 4.f);
+	kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE >>>(window, 1, devDenoised, frameBuf, normalBuf, depthBuf, 64.f, 1.f, 4.f);
+	checkCUDAError("kernBilateralFilter failed.");
+	std::swap(devDenoised, frameBuf);
+	kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(window, 2, devDenoised, frameBuf, normalBuf, depthBuf, 64.f, 1.f, 4.f);
+	checkCUDAError("kernBilateralFilter failed.");
+	std::swap(devDenoised, frameBuf);
+	kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(window, 3, devDenoised, frameBuf, normalBuf, depthBuf, 64.f, 1.f, 4.f);
 	checkCUDAError("kernBilateralFilter failed.");
 
-	kernRetrieveColor <<<blocksPerGrid, BLOCK_SIZE >>>(window, devDenoised, albedoBuf);
+	kernRetrieveColor<<<blocksPerGrid, BLOCK_SIZE >>>(window, devDenoised, albedoBuf);
 	checkCUDAError("kernRetrieveColor failed.");
 
 	std::unique_ptr<float[]> denoised{ new float[window.pixels * 3] };
