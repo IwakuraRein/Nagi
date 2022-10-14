@@ -65,7 +65,7 @@ __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& normal, floa
     return glm::normalize(T * wo_tan.x + B * wo_tan.y + normal * wo_tan.z);
 }
 
-__device__ __host__ glm::vec3 refractionSampler(float ior, const glm::vec3& wi, glm::vec3 n, float rnd) {
+__device__ __host__ glm::vec3 refractSampler(float ior, const glm::vec3& wi, glm::vec3 n, float rnd) {
     float invEta, iorI, iorT;
     float cosI = glm::dot(wi, n);
     if (cosI < 0) { // enter
@@ -102,6 +102,21 @@ __device__ __host__ glm::vec3 refractionSampler(float ior, const glm::vec3& wi, 
             return glm::reflect(wi, -n);
         }
         return wi * invEta + n * (cosT - invEta * cosI);
+    }
+}
+
+__device__ __host__ glm::vec3 reflectSampler(
+    float metallic, glm::vec3 albedo, const glm::vec3& wi, glm::vec3 n, float rnd1, float rnd2, float rnd3, float* pdf, bool* specular) {
+    float F = metallic + (1.f-metallic) * powf(1.f - fmaxf(glm::dot(n, -wi), 0.f), 5.f);
+
+    if (rnd1 > F) { // diffuse
+        *specular = false;
+        return cosHemisphereSampler(n, pdf, rnd2, rnd3);
+    }
+    else { // specular
+        *specular = true;
+        *pdf = 1.f;
+        return glm::reflect(wi, n);
     }
 }
 

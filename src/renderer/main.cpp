@@ -50,15 +50,15 @@ int main(int argc, char* argv[]) {
 			denoiser.reset(nullptr);
 		}
 
-		auto normal = pathTracer->getNormalBuffer();
-		for (int i = 0; i < scene.window.pixels * 3; i++) {
-			normal[i] = (normal[i] + 1.f) / 2.f;
-		}
-		saveHDR(scene.window, normal.get(), 3, saveDir + "/normal_");
-		auto albedo = pathTracer->getAlbedoBuffer();
-		saveHDR(scene.window, albedo.get(), 3, saveDir + "/albedo_");
-		auto depth = pathTracer->getDepthBuffer();
-		saveHDR(scene.window, depth.get(), 1, saveDir + "/depth_");
+		//auto normal = pathTracer->getNormalBuffer();
+		//for (int i = 0; i < scene.window.pixels * 3; i++) {
+		//	normal[i] = (normal[i] + 1.f) / 2.f;
+		//}
+		//saveHDR(scene.window, normal.get(), 3, saveDir + "/normal_");
+		//auto albedo = pathTracer->getAlbedoBuffer();
+		//saveHDR(scene.window, albedo.get(), 3, saveDir + "/albedo_");
+		//auto depth = pathTracer->getDepthBuffer();
+		//saveHDR(scene.window, depth.get(), 1, saveDir + "/depth_");
 
 		pathTracer.reset(nullptr);
 		bvh.reset(nullptr);

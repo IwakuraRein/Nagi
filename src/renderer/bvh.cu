@@ -70,7 +70,7 @@ void BVH::build() {
 int BVH::buildNode(
 	int layer, int maxLayer, std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs, BoundingBox bbox) {
 	if (trigs->size() == 0) return -1;
-	if (trigs->size() > TERMINATE_NUM && layer != maxLayer) {
+	if (trigs->size() > TERMINATE_NUM && layer != maxLayer && bbox.halfExtent.x > FLT_EPSILON && bbox.halfExtent.y > FLT_EPSILON) {
 
 		glm::vec3 eps{ FLT_EPSILON, FLT_EPSILON, FLT_EPSILON };
 		//eps = glm::max(eps, bbox.halfExtent * 0.01f);

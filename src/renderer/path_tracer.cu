@@ -406,8 +406,17 @@ __global__ void kernGenerateGbuffer(
 	else albedo = mtl.albedo;
 
 	if (bounce == 1) {
-		if (/*mtl.type == MTL_TYPE_GLASS || */mtl.type == MTL_TYPE_MIRROR)
-			p.type = PIXEL_TYPE_SPECULAR;
+		if (mtl.type == MTL_TYPE_SPECULAR) {
+			float metallic;
+			if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+				metallic = tex2D<float>(mtl.metallicTex.devTexture, intersect.uv.x, intersect.uv.y);
+			}
+			else metallic = mtl.metallic;
+			if (metallic >= 0.5f)
+				p.type = PIXEL_TYPE_SPECULAR;
+			else
+				p.type = PIXEL_TYPE_GLOSSY;
+		}
 		if (mtl.type == MTL_TYPE_MICROFACET) {
 			if (!hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS) && mtl.roughness <= 0.1f) {
 				p.type = PIXEL_TYPE_GLOSSY;
@@ -490,7 +499,7 @@ __global__ void kernGenerateGbuffer(
 			}
 		}
 		if (p.type == PIXEL_TYPE_SPECULAR) {
-			if (mtl.type != MTL_TYPE_MIRROR/* && mtl.type != MTL_TYPE_GLASS*/) {
+			if (mtl.type != MTL_TYPE_SPECULAR/* && mtl.type != MTL_TYPE_GLASS*/) {
 				p.gbufferStored = true;
 				rayPool[idx] = p;
 				albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3] * albedo.x) / currentSpp;
@@ -541,8 +550,6 @@ __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectIn
 	else {
 		auto rng = makeSeededRandomEngine(spp, idx, 0);
 		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
-		float samplingRnd1 = u01(rng);
-		float samplingRnd2 = u01(rng);
 		glm::vec3 normal, albedo;
 		glm::vec3 wo, bsdf;
 		float pdf;
@@ -559,7 +566,7 @@ __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectIn
 			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
 		}
 		else albedo = mtl.albedo;
-		wo = cosHemisphereSampler(normal, &pdf, samplingRnd1, samplingRnd2);
+		wo = cosHemisphereSampler(normal, &pdf, u01(rng), u01(rng));
 		if (pdf < PDF_EPSILON) {
 			//p.lastHit = -1;
 			p.color = glm::vec3{ 0.f };
@@ -575,26 +582,26 @@ __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectIn
 	}
 	rayPool[idx] = p;
 }
-__global__ void kernShadeMirror(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+__global__ void kernShadeSpecular(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
 	IntersectInfo intersection = intersections[idx];
 	Material mtl = mtlBuf[intersection.mtlIdx];
-	if (mtl.type != MTL_TYPE_MIRROR) return;
+	if (mtl.type != MTL_TYPE_SPECULAR) return;
 
 	Path p = rayPool[idx];
 	p.ray.origin = intersection.position;
 
-	if (p.remainingBounces == 0) {
-		p.color = glm::vec3{ 0.f };
-	}
-	else if (glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
+	if (p.remainingBounces == 0 || glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
 		p.color = glm::vec3{ 0.f };
 		p.remainingBounces = 0;
 	}
 	else {
+		auto rng = makeSeededRandomEngine(spp, idx, 0);
+		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 		glm::vec3 normal, albedo;
+		float metallic;
 		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
 			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
 			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
@@ -608,11 +615,27 @@ __global__ void kernShadeMirror(int rayNum, int spp, Path* rayPool, IntersectInf
 			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
 		}
 		else albedo = mtl.albedo;
-		p.color = p.color * albedo; // lambert is timed inside the bsdf
-		p.ray.dir = glm::reflect(p.ray.dir, normal);
-		p.ray.invDir = 1.f / p.ray.dir;
+		if (hasTexture(mtl, TEXTURE_TYPE_METALLIC)) {
+			metallic = tex2D<float>(mtl.metallicTex.devTexture, intersection.uv.x, intersection.uv.y);
+		}
+		else metallic = mtl.metallic;
 
-		p.remainingBounces--;
+		float pdf;
+		bool specular;
+		glm::vec3 wo = reflectSampler(metallic, albedo, p.ray.dir, normal, u01(rng), u01(rng), u01(rng), &pdf, &specular);
+		if (pdf < PDF_EPSILON) {
+			p.color = glm::vec3{ 0.f };
+			p.remainingBounces = 0;
+		}
+		else {
+			if (!specular)
+				albedo = lambertBrdf(p.ray.dir, wo, normal, albedo); // lambert is timed inside the bsdf
+			p.color = p.color * albedo / pdf;
+			p.ray.dir = wo;
+			p.ray.invDir = 1.f / p.ray.dir;
+
+			p.remainingBounces--;
+		}
 	}
 	rayPool[idx] = p;
 }
@@ -669,9 +692,8 @@ __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo
 		}
 		else albedo = mtl.albedo;
 
+		wo = refractSampler(mtl.ior, p.ray.dir, normal, u01(rng));
 		p.color = p.color * albedo;
-
-		wo = refractionSampler(mtl.ior, p.ray.dir, normal, u01(rng));
 		p.ray.origin += wo * REFRACT_OFFSET;
 		p.ray.dir = wo;
 		p.ray.invDir = 1.f / wo;
@@ -742,7 +764,7 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, Intersec
 			p.remainingBounces = 0;
 		}
 		else {
-			bsdf = microFacetBrdf(p.ray.dir, wo, normal, albedo, metallic, roughness);
+			bsdf = microfacetBrdf(p.ray.dir, wo, normal, albedo, metallic, roughness);
 			p.color = p.color * bsdf / pdf; // lambert is timed inside the bsdf
 			p.ray.dir = wo;
 			p.ray.invDir = 1.f / wo;
@@ -761,8 +783,8 @@ int PathTracer::shade(int rayNum, int spp) {
 	if (hasMaterial(scene, MTL_TYPE_LAMBERT))
 		kernShadeLambert<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
 
-	if (hasMaterial(scene, MTL_TYPE_MIRROR))
-		kernShadeMirror<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+	if (hasMaterial(scene, MTL_TYPE_SPECULAR))
+		kernShadeSpecular<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
 
 	if (hasMaterial(scene, MTL_TYPE_GLASS))
 		kernShadeGlass<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
