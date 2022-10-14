@@ -12,8 +12,8 @@ bool objComp(const Object& o1, const Object& o2) {
 void updateTrigBoundingBox(Triangle& trig) {
 	// use epsilon to avoid bounding box having 0 volume.
 	// FLT_EPSILON isn't enough. try using a larger number.
-	updateBoundingBox(glm::min(trig.vert0.position, trig.vert1.position, trig.vert2.position) - /*FLT_EPSILON*/ 0.00001f,
-		glm::max(trig.vert0.position, trig.vert1.position, trig.vert2.position) + /*FLT_EPSILON*/ 0.00001f,
+	updateBoundingBox(glm::min(trig.vert0.position, trig.vert1.position, trig.vert2.position) - /*FLT_EPSILON*/ 0.0001f,
+		glm::max(trig.vert0.position, trig.vert1.position, trig.vert2.position) + /*FLT_EPSILON*/ 0.0001f,
 		&trig.bbox);
 }
 
@@ -582,8 +582,8 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 		updateBoundingBox(trig.vert1.position, &obj.bbox);
 		updateBoundingBox(trig.vert2.position, &obj.bbox);
 	}
-	obj.bbox.min -= 0.0001f;
-	obj.bbox.max += 0.0001f;
+	obj.bbox.min -= 0.001f;
+	obj.bbox.max += 0.001f;
 	return meshTrigIdx;
 }
 

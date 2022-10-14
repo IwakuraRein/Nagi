@@ -87,16 +87,8 @@ __device__ __host__ glm::vec3 refractSampler(float ior, const glm::vec3& wi, glm
         return glm::reflect(wi, -n);
     }
     else {
-        float r1, r2, F;
         cosT = sqrtf(cosT);
-        float ti = iorT * cosI;
-        float it = iorI * cosT;
-        float tt = iorT * cosT;
-        float ii = iorI * cosI;
-        r1 = (ti - it) / (ti + it);
-        r2 = (ii - tt) / (ii + tt);
-
-        F = 0.5f * (r1 * r1 + r2 * r2);
+        float F = fresnel(cosI, cosT, iorI, iorT);
 
         if (rnd < F) {
             return glm::reflect(wi, -n);
@@ -107,7 +99,8 @@ __device__ __host__ glm::vec3 refractSampler(float ior, const glm::vec3& wi, glm
 
 __device__ __host__ glm::vec3 reflectSampler(
     float metallic, glm::vec3 albedo, const glm::vec3& wi, glm::vec3 n, float rnd1, float rnd2, float rnd3, float* pdf, bool* specular) {
-    float F = metallic + (1.f-metallic) * powf(1.f - fmaxf(glm::dot(n, -wi), 0.f), 5.f);
+    float hv = glm::dot(n, -wi);
+    float F = metallic + (1.f-metallic) * powf(1.f - fmaxf(hv, 0.f), 5.f);
 
     if (rnd1 > F) { // diffuse
         *specular = false;

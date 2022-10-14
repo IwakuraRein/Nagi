@@ -72,8 +72,8 @@ int BVH::buildNode(
 	if (trigs->size() == 0) return -1;
 	if (trigs->size() > TERMINATE_NUM && layer != maxLayer && bbox.halfExtent.x > FLT_EPSILON && bbox.halfExtent.y > FLT_EPSILON) {
 
-		glm::vec3 eps{ FLT_EPSILON, FLT_EPSILON, FLT_EPSILON };
-		//eps = glm::max(eps, bbox.halfExtent * 0.01f);
+		//glm::vec3 eps{ FLT_EPSILON, FLT_EPSILON, FLT_EPSILON };
+		glm::vec3 eps{ 1e-6f, 1e-6f, 1e-6f };
 		glm::vec3 halfX = glm::vec3{ bbox.halfExtent.x, 0.f, 0.f };
 		glm::vec3 halfY = glm::vec3{ 0.f, bbox.halfExtent.y, 0.f };
 		glm::vec3 halfZ = glm::vec3{ 0.f, 0.f, bbox.halfExtent.z };
