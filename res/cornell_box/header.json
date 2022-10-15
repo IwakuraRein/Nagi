@@ -1,9 +1,10 @@
 {
     "graphics": {
         "resolution": [1024, 1024],
-        "sample rate": 128,
+        "sample rate": 8,
         "max bounce": 16,
-        "gamma": 2.2
+        "gamma": 2.2,
+		"denoiser": 1
     },
     "materials": {
         "LeftWall": {
@@ -31,7 +32,7 @@
         },
         "glass": {
             "type": "Glass",
-			"albedo": [0.9, 0.9, 0.9],
+			"albedo": [0.8, 0.8, 0.8],
             "ior": 1.5
         },
         "Floor": {
@@ -67,7 +68,8 @@
             "albedo": [1.00, 0.71, 0.29]
         },
         "mirror": {
-            "type": "Mirror"
+            "type": "Specular",
+			"metallic": 1
         },
         "TallBox": {
             "type": "Microfacet",
@@ -132,67 +134,11 @@
             "mesh": "cube",
             "material": "rust"
         },
-        "Ceiling": {
-            "position": [
-                0,
-                2,
-                0
-            ],
-            "scale": [
-                2,
-                2,
-                2
-            ],
-            "rotation": [
-                0,
-                0,
-                0
-            ],
-            "mesh": "quad",
-            "material": "Ceiling"
-        },
-        "RightWall": {
-            "position": [
-                1,
-                1,
-                0
-            ],
-            "scale": [
-                2,
-                2,
-                2
-            ],
-            "rotation": [
-                270,
-                180,
-                90
-            ],
-            "mesh": "quad",
-            "material": "RightWall"
-        },
-        "LeftWall": {
-            "position": [-1,
-                1,
-                0
-            ],
-            "scale": [
-                2,
-                2,
-                2
-            ],
-            "rotation": [
-                270,
-                0,
-                90
-            ],
-            "mesh": "quad",
-            "material": "LeftWall"
-        },
-        "glass": {
+        "teapot": {
             "position": [0.1, 0, 0.6],
-            "scale": [1.6, 1.6, 1.6],
+            "scale": [0.4, 0.4, 0.4],
             "material": "glass",
-            "mesh": "glass"
+            "mesh": "teapot"
         },
         "vase": {
             "position": [
@@ -248,8 +194,63 @@
             ],
             "mesh": "quad",
             "material": "LightPanel"
+        },       "Ceiling": {
+            "position": [
+                0,
+                2,
+                0
+            ],
+            "scale": [
+                2,
+                2,
+                2
+            ],
+            "rotation": [
+                0,
+                0,
+                0
+            ],
+            "mesh": "quad",
+            "material": "Ceiling"
+        },
+        "RightWall": {
+            "position": [
+                1,
+                1,
+                0
+            ],
+            "scale": [
+                2,
+                2,
+                2
+            ],
+            "rotation": [
+                270,
+                180,
+                90
+            ],
+            "mesh": "quad",
+            "material": "RightWall"
+        },
+        "LeftWall": {
+            "position": [-1,
+                1,
+                0
+            ],
+            "scale": [
+                2,
+                2,
+                2
+            ],
+            "rotation": [
+                270,
+                0,
+                90
+            ],
+            "mesh": "quad",
+            "material": "LeftWall"
         }
-    },
+    }, 
     "camera": {
         "position": [
             0,

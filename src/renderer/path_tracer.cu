@@ -22,6 +22,9 @@ void PathTracer::initialize() {
 	//dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	//kernInitializeFrameBuffer<<<blocksPerGrid, BLOCK_SIZE>>>(window, devFrameBuf);
 	//checkCUDAError("kernInitializeFrameBuffer failed.");
+
+	cudaEventCreate(&timer_start);
+	cudaEventCreate(&timer_end);
 }
 
 void PathTracer::allocateBuffers() {
@@ -39,12 +42,12 @@ void PathTracer::allocateBuffers() {
 	checkCUDAError("cudaMalloc devAlbedoBuf failed.");
 	cudaMalloc((void**)&devDepthBuf, sizeof(float) * window.pixels);
 	checkCUDAError("cudaMalloc devDepthBuf failed.");
-	//cudaMalloc((void**)&devCurrentNormalBuf, sizeof(float) * window.pixels * 3);
-	//checkCUDAError("cudaMalloc devCurrentNormalBuf failed.");
 	cudaMalloc((void**)&devCurrentAlbedoBuf, sizeof(float) * window.pixels * 3);
 	checkCUDAError("cudaMalloc devCurrentAlbedoBuf failed.");
 	cudaMalloc((void**)&devCurrentDepthBuf, sizeof(float) * window.pixels);
 	checkCUDAError("cudaMalloc devCurrentDepthBuf failed.");
+	cudaMalloc((void**)&devVarianceBuf, sizeof(float) * window.pixels);
+	checkCUDAError("cudaMalloc devVarianceBuf failed.");
 	cudaMalloc((void**)&devRayPool1, window.pixels * sizeof(Path));
 	checkCUDAError("cudaMalloc devRayPool1 failed.");
 	cudaMalloc((void**)&devRayPool2, window.pixels * sizeof(Path));
@@ -118,11 +121,6 @@ void PathTracer::destroyBuffers() {
 		checkCUDAError("cudaFree devDepthBuf failed.");
 		devDepthBuf = nullptr;
 	}
-	//if (devCurrentNormalBuf) {
-	//	cudaFree(devCurrentNormalBuf);
-	//	checkCUDAError("cudaFree devCurrentNormalBuf failed.");
-	//	devCurrentNormalBuf = nullptr;
-	//}
 	if (devCurrentAlbedoBuf) {
 		cudaFree(devCurrentAlbedoBuf);
 		checkCUDAError("cudaFree devCurrentAlbedoBuf failed.");
@@ -133,24 +131,32 @@ void PathTracer::destroyBuffers() {
 		checkCUDAError("cudaFree devCurrentDepthBuf failed.");
 		devCurrentDepthBuf = nullptr;
 	}
+	if (devVarianceBuf) {
+		cudaFree(devVarianceBuf);
+		checkCUDAError("cudaFree devVarianceBuf failed.");
+		devVarianceBuf = nullptr;
+	}
 }
 
 PathTracer::~PathTracer() {
 	destroyBuffers();
+	cudaEventDestroy(timer_start);
+	cudaEventDestroy(timer_end);
 }
 
 // intersection test -> compact rays -> sort rays according to material -> compute color -> compact rays -> intersection test...
 void PathTracer::iterate() {
 	std::chrono::steady_clock::time_point timer;
 	std::cout << "  Begin iteration " << spp << ". " << scene.config.spp - spp << " remaining." << std::endl;
-	if (printDetails) timer = std::chrono::high_resolution_clock::now();
+	timer = std::chrono::high_resolution_clock::now();
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>> (window, spp, devRayPool1, scene.config.maxBounce, scene.cam);
+	kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>> (window, spp, devRayPool1, scene.config.maxBounce, scene.cam, spp != 1);
 	checkCUDAError("kernInitializeRays failed.");
 	int bounce = 0;
 	int remainingRays = window.pixels;
 	while (true) {
 		remainingRays = intersectionTest(remainingRays);
+		if (bounce == 0) std::cout << "    First intersection test: " << intersectionTime << " ms." << std::endl;
 		bounce++;
 
 		//std::cout << remainingRays << " ";
@@ -158,12 +164,14 @@ void PathTracer::iterate() {
 
 		//sortRays(remainingRays);
 
+		tik();
 		if (bounce == 1 && scene.hasSkyBox) {
 			generateSkyboxAlbedo(window.pixels - remainingRays, spp);
 		}
 		if (bounce <= MAX_GBUFFER_BOUNCE) {
 			generateGbuffer(remainingRays, spp, bounce);
 		}
+		gbufferTime += tok();
 
 		remainingRays = shade(remainingRays, spp);
 		//std::cout << remainingRays << std::endl;
@@ -174,10 +182,23 @@ void PathTracer::iterate() {
 	}
 	writeFrameBuffer(spp);
 	terminatedRayNum = 0;
-	float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
-	std::cout << "  Iteration " << spp << " finished. Time cost: " << runningTime <<
-		" seconds. Time Remaining: " << runningTime * (scene.config.spp - spp) << " seconds." << std::endl;
 	spp++;
+
+	if (printDetails) {
+		float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
+		std::cout << "    Intersection test: " << intersectionTime / 1000.f << " seconds." << std::endl;
+		std::cout << "    Shading: " << shadingTime / 1000.f << " seconds." << std::endl; 
+		std::cout << "    Compaction : " << compactionTime / 1000.f << " seconds." << std::endl;
+		std::cout << "    Gbuffer generation : " << gbufferTime / 1000.f << " seconds." << std::endl;
+
+		std::cout << "  Iteration " << spp - 1 << " finished. Time cost: " << runningTime <<
+			" seconds. Time Remaining: " << runningTime * (scene.config.spp - spp + 1) << " seconds." << std::endl; 
+
+		intersectionTime = 0.f;
+		compactionTime = 0.f;
+		shadingTime = 0.f;
+		gbufferTime = 0.f;
+	}
 }
 
 __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out) {
@@ -185,33 +206,32 @@ __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStar
 	if (idx >= rayNum) return;
 
 	Ray r = rayPool[idx].ray;
-	glm::vec3 normal, position, tangent;
-	glm::vec3 pickedNormal{ 0.f, 0.f, 0.f };
-	glm::vec3 pickedTangent{ 0.f, 0.f, 0.f };
-	glm::vec2 pickedUV{ 0.f, 0.f };
-	glm::vec2 uv;
+	glm::vec2 pickedBaryCentric, baryCentric;
+	Triangle pickedTrig;
 	int pickedMtlIdx{ -1 };
 	float dist;
 	float minDist{ FLT_MAX };
 	for (int i = trigIdxStart; i <= trigIdxEnd; i++) {
 		Triangle trig = trigBuf[i];
-		if (rayBoxIntersect(r, trig.bbox, &dist)) {
-			if (rayTrigIntersect(r, trig, &dist, &normal, &tangent, &uv)) {
-				if (dist > 0.f && dist < minDist) {
-					minDist = dist;
-					pickedNormal = normal;
-					pickedTangent = tangent;
-					pickedUV = uv;
-					pickedMtlIdx = trig.mtlIdx;
+		if (rayBoxIntersect(r, trig.bbox, dist)) {
+			if (dist < minDist) {
+				if (rayTrigIntersect(r, trig, dist, baryCentric)) {
+					//if (glm::intersectRayTriangle(r.origin, r.dir, trig.vert0.position, trig.vert1.position, trig.vert2.position, baryCentric, dist)) {
+					if (dist > 0.f && dist < minDist) {
+						minDist = dist;
+						pickedTrig = trig;
+						pickedBaryCentric = baryCentric;
+						pickedMtlIdx = trig.mtlIdx;
+					}
 				}
 			}
 		}
 	}
 	IntersectInfo result;
 	result.mtlIdx = pickedMtlIdx;
-	result.normal = pickedNormal;
-	result.tangent = pickedTangent;
-	result.uv = pickedUV;
+	result.normal = (1 - pickedBaryCentric.x - pickedBaryCentric.y) * pickedTrig.vert0.normal + pickedBaryCentric.x * pickedTrig.vert1.normal + pickedBaryCentric.y * pickedTrig.vert2.normal;
+	result.tangent = (1 - pickedBaryCentric.x - pickedBaryCentric.y) * pickedTrig.vert0.tangent + pickedBaryCentric.x * pickedTrig.vert1.tangent + pickedBaryCentric.y * pickedTrig.vert2.tangent;
+	result.uv = (1 - pickedBaryCentric.x - pickedBaryCentric.y) * pickedTrig.vert0.uv + pickedBaryCentric.x * pickedTrig.vert1.uv + pickedBaryCentric.y * pickedTrig.vert2.uv;
 	result.position = r.origin + r.dir * (minDist - REFLECT_OFFSET);
 	//r.origin = r.origin + r.dir * (minDist - REFLECT_OFFSET);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
@@ -224,27 +244,24 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 
 	Ray r = rayPool[idx].ray;
 	glm::vec3 normal, position, tangent;
-	glm::vec3 pickedNormal{ 0.f, 0.f, 0.f };
-	glm::vec3 pickedTangent{ 0.f, 0.f, 0.f };
-	glm::vec2 pickedUV{ 0.f, 0.f };
-	glm::vec2 uv;
+	glm::vec2 pickedBaryCentric, baryCentric;
+	Triangle pickedTrig;
 	int pickedMtlIdx{ -1 };
 	float dist;
 	float minDist{ FLT_MAX };
 	for (int i = 0; i < objNum; i++) {
 		Object obj = objBuf[i];
-		if (rayBoxIntersect(r, obj.bbox, &dist)) {
+		if (rayBoxIntersect(r, obj.bbox, dist)) {
 			if (dist < minDist) {
 				for (int j = obj.trigIdxStart; j <= obj.trigIdxEnd; j++) {
 					Triangle trig = trigBuf[j];
-					if (rayBoxIntersect(r, trig.bbox, &dist)) {
-						if (rayTrigIntersect(r, trig, &dist, &normal, &tangent, &uv)) {
+					if (rayBoxIntersect(r, trig.bbox, dist)) {
+						if (rayTrigIntersect(r, trig, dist, baryCentric)) {
 							if (dist > 0.f && dist < minDist) {
 								minDist = dist;
-								pickedNormal = normal;
-								pickedUV = uv;
+								pickedBaryCentric = baryCentric;
+								pickedTrig = trig;
 								pickedMtlIdx = trig.mtlIdx;
-								pickedTangent = tangent;
 							}
 						}
 					}
@@ -254,9 +271,9 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 	}
 	IntersectInfo result;
 	result.mtlIdx = pickedMtlIdx;
-	result.normal = pickedNormal;
-	result.tangent = pickedTangent;
-	result.uv = pickedUV;
+	result.normal = (1 - pickedBaryCentric.x - pickedBaryCentric.y) * pickedTrig.vert0.normal + pickedBaryCentric.x * pickedTrig.vert1.normal + pickedBaryCentric.y * pickedTrig.vert2.normal;
+	result.tangent = (1 - pickedBaryCentric.x - pickedBaryCentric.y) * pickedTrig.vert0.tangent + pickedBaryCentric.x * pickedTrig.vert1.tangent + pickedBaryCentric.y * pickedTrig.vert2.tangent;
+	result.uv = (1 - pickedBaryCentric.x - pickedBaryCentric.y) * pickedTrig.vert0.uv + pickedBaryCentric.x * pickedTrig.vert1.uv + pickedBaryCentric.y * pickedTrig.vert2.uv;
 	result.position = r.origin + r.dir * (minDist - REFLECT_OFFSET);
 	//r.origin = r.origin + r.dir * (minDist - REFLECT_OFFSET);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
@@ -265,81 +282,79 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 }
 
 __global__ void kernBVHIntersectTest(
-	int rayNum, Path* rayPool, int objNum, Object* objBuf, BVH::Node* treeBuf, int* treeTrigIdx, Triangle* trigBuf, IntersectInfo* out) {
+	int rayNum, Path* rayPool, BVH::Node root, BVH::Node* treeBuf, Triangle* trigBuf, IntersectInfo* out) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
 	Ray r = rayPool[idx].ray;
-	glm::vec3 normal, position, tangent;
-	glm::vec3 pickedNormal{ 0.f };
-	glm::vec3 pickedTangent{ 0.f };
-	glm::vec2 pickedUV{ 0.f };
-	glm::vec2 uv;
+	glm::vec2 pickedBaryCentric, baryCentric;
+	Triangle pickedTrig;
 	int pickedMtlIdx{ -1 };
 	float trigDist;
 	float minTrigD{ FLT_MAX };
 	float boxD;
-	//BoundingBox lastTrigBox{};
+	//Bound lastTrigBox{};
 
 	BVH::Node stack[MAX_TREE_DEPTH + 1];
-	int searchedChildern[MAX_TREE_DEPTH + 1] = { 0 };
-	for (int i = 0; i < objNum; i++) {
-		Object obj = objBuf[i];
-		if (rayBoxIntersect(r, obj.bbox, &boxD)) {
-			if (boxD < minTrigD) {
-				int ptr = 0;
-				stack[0] = treeBuf[obj.treeRoot]; // root node;
-				while (ptr >= 0) {
-					BVH::Node& node = stack[ptr];
-					if (node.trigIdxStart < 0) { // not leaf node
-						if (node.size > searchedChildern[ptr]) {
-							int childNo = searchedChildern[ptr];
-							searchedChildern[ptr]++;
-							if (rayBoxIntersect(r, node.childrenMin[childNo], node.childrenMax[childNo], &boxD)) {
-								if (boxD < minTrigD) {
-									ptr++;
-									stack[ptr] = treeBuf[node.children[childNo]];
-									searchedChildern[ptr] = 0;
-									continue;
-								}
-							}
-						}
-						else {
-							searchedChildern[ptr] = 0;
-							ptr--;
-						}
-					}
-					else {
-						for (int i = node.trigIdxStart; i < node.trigIdxStart + node.size; i++) {
-							Triangle trig = trigBuf[treeTrigIdx[i]];
-							if (rayBoxIntersect(r, trig.bbox, &trigDist)) {
-								//if (trigDist >= minTrigD) {
-								//	if (!boxBoxIntersect(trig.bbox, lastTrigBox)) continue;
-								//}
-								if (rayTrigIntersect(r, trig, &trigDist, &normal, &tangent, &uv)) {
-									if (trigDist > 0.f && trigDist < minTrigD) {
-										minTrigD = trigDist;
-										pickedNormal = normal;
-										pickedUV = uv;
-										pickedMtlIdx = trig.mtlIdx;
-										pickedTangent = tangent;
-										//lastTrigBox = trig.bbox;
-									}
-								}
-							}
-						}
-						searchedChildern[ptr] = 0;
-						ptr--;
+	int searched[MAX_TREE_DEPTH + 1] = { 0 };
+	int ptr = 0;
+	stack[0] = root;
+
+	glm::vec3 childMin, childMax;
+	int child;
+	while (ptr >= 0) {
+		BVH::Node& node = stack[ptr];
+		if (!node.leaf) {
+			if (searched[ptr] < 2) {
+				if (searched[ptr] == 0) {
+					childMin = node.leftMin;
+					childMax = node.leftMax;
+					child = node.left;
+				}
+				if (searched[ptr] == 1) {
+					childMin = node.rightMin;
+					childMax = node.rightMax;
+					child = node.right;
+				}
+				searched[ptr]++;
+				if (rayBoxIntersect(r, childMin, childMax, boxD)) {
+					if (boxD < minTrigD) {
+						ptr++;
+						stack[ptr] = treeBuf[child];
+						searched[ptr] = 0;
+						continue;
 					}
 				}
 			}
+			else ptr--;
+		}
+		else {
+			for (int i = node.left; i <= node.right; i++) {
+				Triangle trig = trigBuf[i];
+				if (rayBoxIntersect(r, trig.bbox, trigDist)) {
+					//if (trigDist >= minTrigD) {
+					//	if (!boxBoxIntersect(trig.bbox, lastTrigBox)) continue;
+					//}
+					if (rayTrigIntersect(r, trig, trigDist, baryCentric)) {
+					//if (glm::intersectRayTriangle(r.origin, r.dir, trig.vert0.position, trig.vert1.position, trig.vert2.position, baryCentric, trigDist)) {
+						if (trigDist > 0.f && trigDist < minTrigD) {
+							minTrigD = trigDist;
+							pickedBaryCentric = baryCentric;
+							pickedTrig = trig;
+							pickedMtlIdx = trig.mtlIdx;
+							//lastTrigBox = trig.bbox;
+						}
+					}
+				}
+			}
+			ptr--;
 		}
 	}
 	IntersectInfo result;
 	result.mtlIdx = pickedMtlIdx;
-	result.normal = pickedNormal;
-	result.tangent = pickedTangent;
-	result.uv = pickedUV;
+	result.normal = (1 - pickedBaryCentric.x - pickedBaryCentric.y) * pickedTrig.vert0.normal + pickedBaryCentric.x * pickedTrig.vert1.normal + pickedBaryCentric.y * pickedTrig.vert2.normal;
+	result.tangent = (1 - pickedBaryCentric.x - pickedBaryCentric.y) * pickedTrig.vert0.tangent + pickedBaryCentric.x * pickedTrig.vert1.tangent + pickedBaryCentric.y * pickedTrig.vert2.tangent;
+	result.uv = (1 - pickedBaryCentric.x - pickedBaryCentric.y) * pickedTrig.vert0.uv + pickedBaryCentric.x * pickedTrig.vert1.uv + pickedBaryCentric.y * pickedTrig.vert2.uv;
 	result.position = r.origin + r.dir * (minTrigD - REFLECT_OFFSET);
 	//r.origin = r.origin + r.dir * (minTrigD - REFLECT_OFFSET);
 	rayPool[idx].lastHit = pickedMtlIdx; // if pickedMtlIdx >=0, ray hits something
@@ -348,13 +363,18 @@ __global__ void kernBVHIntersectTest(
 
 int PathTracer::intersectionTest(int rayNum) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
+
+	tik();
 	//kernTrigIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, 0, scene.trigBuf.size()-1, devTrigBuf, devResults1);
 	//kernObjIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, devTrigBuf, devResults1);
 	kernBVHIntersectTest<<<blocksPerGrid, BLOCK_SIZE>>> (
-		rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, bvh.devTree, bvh.devTreeTrigIdx, devTrigBuf, devResults1);
+		rayNum, devRayPool1, bvh.tree[bvh.treeRoot], bvh.devTree, devTrigBuf, devResults1);
+	intersectionTime += tok();
 	checkCUDAError("kernBVHIntersectTest failed.");
 
+	tik();
 	rayNum = compactRays(rayNum, devRayPool1, devRayPool2, devResults1, devResults2);
+	compactionTime += tok();
 
 	std::swap(devRayPool1, devRayPool2);
 	std::swap(devResults1, devResults2);
@@ -373,11 +393,9 @@ void PathTracer::sortRays(int rayNum) {
 	checkCUDAError("thrust::stable_sort failed.");
 }
 
-// blend the gbuffer (normal and albedo) is good for denoising. 
-// reference: https://github.com/tunabrain/tungsten/issues/69
 __global__ void kernGenerateGbuffer(
 	int rayNum, float currentSpp, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, 
-	float* currentAlbedoBuf, /*float* currentNormalBuf, */float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
+	float* currentAlbedoBuf, float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
@@ -433,17 +451,20 @@ __global__ void kernGenerateGbuffer(
 			currentAlbedoBuf[pixel * 3] = albedo.x;
 			currentAlbedoBuf[pixel * 3 + 1] = albedo.y;
 			currentAlbedoBuf[pixel * 3 + 2] = albedo.z;
-			currentDepthBuf[pixel] = depth;
+			if (currentSpp == 1.f)currentDepthBuf[pixel] = depth;
 		}
 		else if (p.type == PIXEL_TYPE_GLOSSY) {
 			currentAlbedoBuf[pixel * 3] = albedo.x;
 			currentAlbedoBuf[pixel * 3 + 1] = albedo.y;
 			currentAlbedoBuf[pixel * 3 + 2] = albedo.z;
-			currentDepthBuf[pixel] = depth;
+			//currentDepthBuf[pixel] = depth;
 
-			normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
-			normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
-			normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
+			if (currentSpp == 1.f) {
+				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
+				normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
+				normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
+				normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
+			}
 		}
 		else {
 			p.type == PIXEL_TYPE_DIFFUSE;
@@ -452,11 +473,13 @@ __global__ void kernGenerateGbuffer(
 			albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + albedo.y) / currentSpp;
 			albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + albedo.z) / currentSpp;
 
-			depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
+			if (currentSpp == 1.f) {
+				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
 
-			normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
-			normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
-			normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
+				normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
+				normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
+				normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
+			}
 		}
 
 		rayPool[idx] = p;
@@ -482,48 +505,51 @@ __global__ void kernGenerateGbuffer(
 					}
 				}
 			}
-			if (hitDiffuse) {
+
+			if (hitDiffuse || bounce == MAX_GBUFFER_BOUNCE) {
 				p.gbufferStored = true;
 				rayPool[idx] = p;
 				albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3] * albedo.x) / currentSpp;
 				albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 1] * albedo.y) / currentSpp;
 				albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 2] * albedo.z) / currentSpp;
-
-				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + currentDepthBuf[pixel] + depth) / currentSpp;
 			}
 			else {
 				currentAlbedoBuf[pixel * 3] *= albedo.x;
 				currentAlbedoBuf[pixel * 3 + 1] *= albedo.y;
 				currentAlbedoBuf[pixel * 3 + 2] *= albedo.z;
-				currentDepthBuf[pixel] += depth;
 			}
 		}
 		if (p.type == PIXEL_TYPE_SPECULAR) {
-			if (mtl.type != MTL_TYPE_SPECULAR/* && mtl.type != MTL_TYPE_GLASS*/) {
+			if (mtl.type != MTL_TYPE_SPECULAR || bounce == MAX_GBUFFER_BOUNCE) {
 				p.gbufferStored = true;
 				rayPool[idx] = p;
 				albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3] * albedo.x) / currentSpp;
 				albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 1] * albedo.y) / currentSpp;
 				albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 2] * albedo.z) / currentSpp;
-
-				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + currentDepthBuf[pixel] + depth) / currentSpp;
-
-				normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
-				normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
-				normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
+				if (currentSpp == 1.f) {
+					depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + currentDepthBuf[pixel] + depth) / currentSpp;
+					normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
+					normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
+					normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
+				}
 			}
 			else {
 				currentAlbedoBuf[pixel * 3] *= albedo.x;
 				currentAlbedoBuf[pixel * 3 + 1] *= albedo.y;
 				currentAlbedoBuf[pixel * 3 + 2] *= albedo.z;
-				currentDepthBuf[pixel] += depth;
+				if (currentSpp == 1.f) currentDepthBuf[pixel] += depth;
 			}
 		}
 	}
 }
 void PathTracer::generateGbuffer(int rayNum, int spp, int bounce) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernGenerateGbuffer<<<blocksPerGrid, BLOCK_SIZE >> > (
+	//if (spp == 1) {
+	//	kernGenerateNormalDepth(
+	//		rayNum, bounce, scene.cam.position, devRayPool1, devResults1, devMtlBuf, devNormalBuf, devDepthBuf);
+	//}
+	//kernGenerateAlbedo(rayNum, float(spp), bounce, devRayPool1, devResults1, devMtlBuf, devCurrentAlbedoBuf, devAlbedoBuf);
+	kernGenerateGbuffer<<<blocksPerGrid, BLOCK_SIZE>>>(
 		rayNum, (float)spp, bounce, scene.cam.position, devRayPool1, devResults1, devMtlBuf, devCurrentAlbedoBuf, devCurrentDepthBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
 }
 
@@ -566,7 +592,7 @@ __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectIn
 			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
 		}
 		else albedo = mtl.albedo;
-		wo = cosHemisphereSampler(normal, &pdf, u01(rng), u01(rng));
+		wo = cosHemisphereSampler(normal, pdf, u01(rng), u01(rng));
 		if (pdf < PDF_EPSILON) {
 			//p.lastHit = -1;
 			p.color = glm::vec3{ 0.f };
@@ -622,7 +648,7 @@ __global__ void kernShadeSpecular(int rayNum, int spp, Path* rayPool, IntersectI
 
 		float pdf;
 		bool specular;
-		glm::vec3 wo = reflectSampler(metallic, albedo, p.ray.dir, normal, u01(rng), u01(rng), u01(rng), &pdf, &specular);
+		glm::vec3 wo = reflectSampler(metallic, albedo, p.ray.dir, normal, u01(rng), u01(rng), u01(rng), pdf, specular);
 		if (pdf < PDF_EPSILON) {
 			p.color = glm::vec3{ 0.f };
 			p.remainingBounces = 0;
@@ -754,8 +780,8 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, Intersec
 		float r = u01(rng);
 		float s = 0.5f + metallic / 2.f;
 		float pdf2;
-		wo = ggxImportanceSampler(roughness, p.ray.dir, normal, &pdf, samplingRnd1, samplingRnd2);
-		glm::vec3 wo2 = cosHemisphereSampler(normal, &pdf2, samplingRnd1, samplingRnd2);
+		wo = ggxImportanceSampler(roughness, p.ray.dir, normal, pdf, samplingRnd1, samplingRnd2);
+		glm::vec3 wo2 = cosHemisphereSampler(normal, pdf2, samplingRnd1, samplingRnd2);
 		if (r > s) wo = wo2;
 		pdf = s * pdf + (1.f - s) * pdf2;
 
@@ -777,6 +803,8 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, Intersec
 
 int PathTracer::shade(int rayNum, int spp) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
+
+	tik();
 	if (hasMaterial(scene, MTL_TYPE_LIGHT_SOURCE))
 		kernShadeLightSource<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
 
@@ -791,10 +819,14 @@ int PathTracer::shade(int rayNum, int spp) {
 
 	if (hasMaterial(scene, MTL_TYPE_MICROFACET))
 		kernShadeMicrofacet<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+	shadingTime += tok();
 
 	checkCUDAError("kernShading failed.");
 
+	tik();
 	rayNum = compactRays(rayNum, devRayPool1, devRayPool2);
+	compactionTime += tok();
+
 	std::swap(devRayPool1, devRayPool2);
 	return rayNum;
 }
@@ -834,7 +866,7 @@ int PathTracer::compactRays(int rayNum, Path* rayPool, Path* compactedRayPool) {
 	return remaining;
 }
 
-__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam/*, bool jitter, bool DOP*/) {
+__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= window.pixels) return;
 	thrust::default_random_engine rng = makeSeededRandomEngine(spp, idx, 0);
@@ -848,17 +880,16 @@ __global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, in
 	int py = idx / window.width;
 	int px = idx - py * window.width;
 
-	//glm::vec3 ndc{ -1.f + px * PIXEL_WIDTH + HALF_PIXEL_WIDTH, -1.f + py * PIXEL_HEIGHT + HALF_PIXEL_HEIGHT, 0.5f };
-	//vecTransform(&ndc, cam.invProjectMat*cam.invViewMat);
-	//glm::vec3 dir = ndc - cam.position;
-
 	float theta = TWO_PI * u01(rng);
 	float r = u01(rng) * cam.apenture;
 
-	float rnd1 = u01(rng) - 0.5f;
-	float rnd2 = u01(rng) - 0.5f;
-	//float rnd1 = 0.f;
-	//float rnd2 = 0.f;
+	float rnd1{ 0.f };
+	float rnd2{ 0.f };
+
+	if (jitter) {
+		rnd1 = u01(rng) - 0.5f;
+		rnd2 = u01(rng) - 0.5f;
+	}
 
 	glm::vec3 lookAt = cam.filmOrigin
 		- cam.upDir * (((float)py + rnd1) * cam.pixelHeight + cam.halfPixelHeight)

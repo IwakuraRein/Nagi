@@ -63,17 +63,6 @@
 #define HALF_FILM_HEIGHT 0.012f // 24 x 36 mm film
 #define CAMERA_MULTIPLIER 1000.f // multiply a large number to work around float's precision problem
 
-// CUDA 11.3 has added device code support for new C++ keywords: `constexpr` and `auto`.
-// In CUDA C++, `__device__` and `__constant__` variables can now be declared `constexpr`.
-// The constexpr variables can be used in constant expressions, where they are evaluated at
-// compile time, or as normal variables in contexts where constant expressions are not required.
-//constexpr int BLOCK_SIZE = 128;
-//constexpr int WINDOW_WIDTH = 1024;
-//constexpr int WINDOW_HEIGHT = 1024;
-//constexpr int PIXEL_COUNT = WINDOW_WIDTH * WINDOW_HEIGHT;
-//constexpr float INV_WIDTH = 1.f / WINDOW_WIDTH;
-//constexpr float INV_HEIGHT = 1.f / WINDOW_HEIGHT;
-
 // help functions
 inline __device__ __host__ float fminf(float X, float Y, float Z) {
 	return fminf(X, fminf(Y, Z));
@@ -193,19 +182,19 @@ struct Camera {
 	float pixelWidth, pixelHeight, halfPixelWidth, halfPixelHeight;
 };
 
-struct BoundingBox { // AABB
+struct Bound { // AABB
 	glm::vec3 min{ FLT_MAX, FLT_MAX, FLT_MAX };
 	glm::vec3 max{ -FLT_MAX, -FLT_MAX, -FLT_MAX };
 	glm::vec3 center;
 	glm::vec3 halfExtent;
 };
-inline __device__ __host__ void updateBoundingBox(const glm::vec3& position, BoundingBox* box) {
+inline __device__ __host__ void updateBoundingBox(const glm::vec3& position, Bound* box) {
 	box->min = glm::min(position, box->min);
 	box->max = glm::max(position, box->max);
 	box->halfExtent = (box->max - box->min) * 0.5f;
 	box->center = box->min + box->halfExtent;
 }
-inline __device__ __host__ void updateBoundingBox(const glm::vec3& min, const glm::vec3& max, BoundingBox* box) {
+inline __device__ __host__ void generateBoundingBox(const glm::vec3& min, const glm::vec3& max, Bound* box) {
 	box->min = min;
 	box->max = max;
 	box->halfExtent = (box->max - box->min) * 0.5f;
@@ -255,7 +244,7 @@ struct Triangle {
 	Vertex vert0;
 	Vertex vert1;
 	Vertex vert2;
-	BoundingBox bbox;
+	Bound bbox;
 };
 
 struct Ray {
@@ -279,7 +268,7 @@ struct Object {
 	int trigIdxStart;
 	int trigIdxEnd;
 	int mtlIdx;
-	BoundingBox bbox;
+	Bound bbox;
 	int treeRoot;
 };
 
@@ -332,7 +321,7 @@ struct Scene {
 	WindowSize window;
 	Camera cam;
 
-	BoundingBox bbox;
+	Bound bbox;
 	Texture skybox;
 	bool hasSkyBox{ false };
 

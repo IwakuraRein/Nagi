@@ -30,7 +30,6 @@ Nagi is a simple path tracer built in CUDA. As shown in the picture, it's capabl
 - [ ] Preview Window
 - [ ] Importance Sampling On Skybox
 - [ ] Multiple Importance Sampling
-- [ ] Better BVH Algorithms
 
 ## Usage
 

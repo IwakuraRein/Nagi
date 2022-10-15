@@ -26,14 +26,11 @@
     <ClCompile Include="src\renderer\main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\renderer\bsdf.cu" />
     <CudaCompile Include="src\renderer\bvh.cu" />
     <CudaCompile Include="src\renderer\common.cu" />
     <CudaCompile Include="src\renderer\denoiser.cu" />
-    <CudaCompile Include="src\renderer\intersection.cu" />
     <CudaCompile Include="src\renderer\io.cu" />
     <CudaCompile Include="src\renderer\path_tracer.cu" />
-    <CudaCompile Include="src\renderer\sampler.cu" />
     <CudaCompile Include="src\renderer\scene_loader.cu" />
   </ItemGroup>
   <ItemGroup>

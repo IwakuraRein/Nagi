@@ -1,17 +1,6 @@
 #include "bsdf.cuh"
 
 namespace nagi {
-__device__ glm::vec3 specularBrdf(const glm::vec3& wi, const glm::vec3& wo, const glm::vec3& normal, const glm::vec3& albedo, float metallic) {
-	glm::vec3 F;
-	glm::vec3 h = halfway(-wi, wo);
-	float hv = fmaxf(glm::dot(h, -wi), 0.f);
-	glm::vec3 f0;
-	f0 = glm::mix(glm::vec3{ 0.04 }, albedo, metallic);
-	//f0 = albedo * metallic;
-	F = f0 + (1.f - f0) * powf(1.f - hv, 5.f);
-	return (1.f - metallic) * (1.f - F) * albedo * INV_PI * fmaxf(glm::dot(wo, normal), 0.f) +
-		F * 0.25f / (fmaxf(glm::dot(-wi, normal), FLT_EPSILON));
-}
 
 // reference: https://learnopengl.com/PBR/Theory
 __device__ glm::vec3 nagi::microfacetBrdf(

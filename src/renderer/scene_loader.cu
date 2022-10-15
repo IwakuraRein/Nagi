@@ -5,14 +5,10 @@
 
 namespace nagi {
 
-bool objComp(const Object& o1, const Object& o2) { 
-	return (o1.bbox.halfExtent.x * o1.bbox.halfExtent.y * o1.bbox.halfExtent.z) >
-		(o2.bbox.halfExtent.x * o2.bbox.halfExtent.y * o2.bbox.halfExtent.z); }
-
 void updateTrigBoundingBox(Triangle& trig) {
 	// use epsilon to avoid bounding box having 0 volume.
 	// FLT_EPSILON isn't enough. try using a larger number.
-	updateBoundingBox(glm::min(trig.vert0.position, trig.vert1.position, trig.vert2.position) - /*FLT_EPSILON*/ 0.0001f,
+	generateBoundingBox(glm::min(trig.vert0.position, trig.vert1.position, trig.vert2.position) - /*FLT_EPSILON*/ 0.0001f,
 		glm::max(trig.vert0.position, trig.vert1.position, trig.vert2.position) + /*FLT_EPSILON*/ 0.0001f,
 		&trig.bbox);
 }
@@ -83,7 +79,7 @@ void SceneLoader::load() {
 	}
 	jFile = readJson(filePath);
 
-	scene.bbox = BoundingBox{};
+	scene.bbox = Bound{};
 
 	loadConfig();
 	loadCameras();
@@ -344,7 +340,10 @@ void SceneLoader::loadObjects() {
 	scene.bbox.max += /*FLT_EPSILON*/0.001f;
 
 	// sort objects according to their volume
-	std::sort(scene.objBuf.begin(), scene.objBuf.end(), objComp);
+	auto comparator = [](const Object& o1, const Object& o2) {
+		return (o1.bbox.halfExtent.x * o1.bbox.halfExtent.y * o1.bbox.halfExtent.z) >
+			(o2.bbox.halfExtent.x * o2.bbox.halfExtent.y * o2.bbox.halfExtent.z); };
+	std::sort(scene.objBuf.begin(), scene.objBuf.end(), comparator);
 }
 
 void SceneLoader::loadCameras() {
@@ -553,7 +552,7 @@ glm::ivec2 SceneLoader::loadMesh(const std::string& meshPath, Object& obj, const
 
 	meshTrigIdx.y = scene.trigBuf.size() - 1;
 
-	obj.bbox = BoundingBox{};
+	obj.bbox = Bound{};
 	// move everything to world space and update bounding boxes
 	for (int i = meshTrigIdx.x; i <= meshTrigIdx.y; i++) {
 		Triangle& trig = scene.trigBuf[i];

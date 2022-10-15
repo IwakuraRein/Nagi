@@ -49,25 +49,30 @@ struct IntersectionComp {
 
 __global__ void kernInitializeFrameBuffer(WindowSize window, float* frame);
 __global__ void kernInitializeRays(
-WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam/*, bool jitter = true, bool DOP = true*/);
+	WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter = true);
 // naive bvh
+// Do not use this function if a bvh is built since triangles were shuffled.
 __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, Triangle* trigBuf, IntersectInfo* out);
 // brute force
 __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out);
 // oct tree bvh
-__global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, BVH::Node* treeBuf, int* treeTrigBuf, Triangle* trigBuf, IntersectInfo* out);
+__global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, BVH::Node root, BVH::Node* treeBuf, Triangle* trigBuf, IntersectInfo* out);
 __global__ void kernShadeLightSource(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernShadeSpecular(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* rayPool, float* frameBuffer);
-__global__ void kernGenerateGbuffer(
-	int rayNum, float currentSpp, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf,
-	float* currentAlbedoBuf, /*float* currentNormalBuf, */float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
-__global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool);
 __global__ void kernGenerateSkyboxAlbedo(
 	int rayNum, float currentSpp, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool, float* albedoBuf);
+__global__ void kernGenerateGbuffer(
+	int rayNum, float currentSpp, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf,
+	float* currentAlbedoBuf, float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
+//__global__ void kernGenerateNormalDepth(
+//	int rayNum, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* normalBuf, float* depthBuf);
+//__global__ void kernGenerateAlbedo(
+//	int rayNum, float currentSpp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* currentAlbedoBuf, float* albedoBuf);
+__global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool);
 
 class PathTracer {
 public:
@@ -130,9 +135,27 @@ public:
 	float* devNormalBuf{ nullptr };
 	float* devAlbedoBuf{ nullptr };
 	float* devDepthBuf{ nullptr };
-	//float* devCurrentNormalBuf{ nullptr };
 	float* devCurrentAlbedoBuf{ nullptr };
 	float* devCurrentDepthBuf{ nullptr };
+	float* devVarianceBuf{ nullptr };
+
+
+	cudaEvent_t timer_start{ nullptr }, timer_end{ nullptr };
+	bool timerStarted{ false };
+	void tik() {
+		cudaEventRecord(timer_start);
+		timerStarted = true;
+	}
+	float tok() {
+		if (!timerStarted) return 0.f;
+		cudaEventRecord(timer_end);
+		cudaEventSynchronize(timer_end);
+		float t;
+		cudaEventElapsedTime(&t, timer_start, timer_end);
+		timerStarted = false;
+		return t;
+	}
+	float intersectionTime{ 0.f }, compactionTime{ 0.f }, shadingTime{ 0.f }, gbufferTime{ 0.f };
 };
 
 }

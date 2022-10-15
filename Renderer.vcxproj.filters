@@ -46,9 +46,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\renderer\bsdf.cu">
-      <Filter>Source</Filter>
-    </CudaCompile>
     <CudaCompile Include="src\renderer\bvh.cu">
       <Filter>Source</Filter>
     </CudaCompile>
@@ -58,16 +55,10 @@
     <CudaCompile Include="src\renderer\denoiser.cu">
       <Filter>Source</Filter>
     </CudaCompile>
-    <CudaCompile Include="src\renderer\intersection.cu">
-      <Filter>Source</Filter>
-    </CudaCompile>
     <CudaCompile Include="src\renderer\io.cu">
       <Filter>Source</Filter>
     </CudaCompile>
     <CudaCompile Include="src\renderer\path_tracer.cu">
-      <Filter>Source</Filter>
-    </CudaCompile>
-    <CudaCompile Include="src\renderer\sampler.cu">
       <Filter>Source</Filter>
     </CudaCompile>
     <CudaCompile Include="src\renderer\scene_loader.cu">

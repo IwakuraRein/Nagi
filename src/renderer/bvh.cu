@@ -7,10 +7,10 @@ BVH::~BVH() {
 		cudaFree(devTree);
 		checkCUDAError("cudaFree devTree failed.");
 	}
-	if (devTreeTrigIdx) {
-		cudaFree(devTreeTrigIdx);
-		checkCUDAError("cudaFree devTree failed.");
-	}
+	//if (devTreeTrigIdx) {
+	//	cudaFree(devTreeTrigIdx);
+	//	checkCUDAError("cudaFree devTree failed.");
+	//}
 }
 
 void BVH::build() {
@@ -18,44 +18,17 @@ void BVH::build() {
 	timer = std::chrono::high_resolution_clock::now();
 	std::cout << "Building BVH... ";
 
-	trigIndices = std::make_shared<std::list<std::pair<int, Triangle*>>>();
-	//assume we must reach max tree depth when triangles are larger than 16384
-	double depthBottom = pow(16384.0 / (double)TERMINATE_NUM, 1.0 / (double)MAX_TREE_DEPTH);
-	for (auto& obj : scene.objBuf) {
-		int trigCount = obj.trigIdxEnd - obj.trigIdxStart + 1;
-		auto initialIndices = std::make_shared<std::list<std::pair<int, Triangle*>>>();
-		initialIndices->resize(trigCount);
-		int i = obj.trigIdxStart;
-		for (auto it = initialIndices->begin(); it != initialIndices->end(); it++) {
-			it->first = i;
-			it->second = &scene.trigBuf[i];
-			i++;
-		}
-		if (trigCount <= TERMINATE_NUM) {
-			tree.push_back(Node{ trigCount, {}, {}, {}, (int)trigIndices->size(), obj.bbox });
-			obj.treeRoot = tree.size() - 1;
-			//obj.treeDepth = 0;
-			trigIndices->splice(trigIndices->end(), *initialIndices);
-		}
-		else {
-			int depth = std::min((int)(log((double)trigCount) / log(depthBottom)), MAX_TREE_DEPTH);
-			obj.treeRoot = buildNode(0, depth, initialIndices, obj.bbox);
-			//obj.treeDepth = depth;
-		}
-		//std::cout << obj.treeRoot <<" "<< trigCount << " " << trigIndices->size() << " "<< log((double)trigCount) / log(depthBottom) << std::endl;
-		auto& node = tree[obj.treeRoot];
-		//std::cout << "    "<< node.size << " " << node.trigIdxStart << std::endl;
-	}
+ 	treeRoot = buildNode(0, MAX_TREE_DEPTH, scene.trigBuf.begin(), scene.trigBuf.end()-1, scene.bbox);
 
-	cudaMalloc((void**)&devTreeTrigIdx, sizeof(int) * trigIndices->size());
-	checkCUDAError("cudaMalloc devTreeTrigIdx failed.");
+	//cudaMalloc((void**)&devTreeTrigIdx, sizeof(int) * trigIndices->size());
+	//checkCUDAError("cudaMalloc devTreeTrigIdx failed.");
 
-	int i = 0;
-	for (auto it = trigIndices->begin(); it != trigIndices->end(); it++) {
-		cudaMemcpy(devTreeTrigIdx + i, &it->first, sizeof(int), cudaMemcpyHostToDevice);
-		i++;
-	}
-	checkCUDAError("cudaMemcpy devTreeTrigIdx failed.");
+	//int i = 0;
+	//for (auto it = trigIndices->begin(); it != trigIndices->end(); it++) {
+	//	cudaMemcpy(devTreeTrigIdx + i, &it->first, sizeof(int), cudaMemcpyHostToDevice);
+	//	i++;
+	//}
+	//checkCUDAError("cudaMemcpy devTreeTrigIdx failed.");
 
 	cudaMalloc((void**)&devTree, sizeof(Node) * tree.size());
 	checkCUDAError("cudaMalloc devTree failed.");
@@ -64,168 +37,160 @@ void BVH::build() {
 	checkCUDAError("cudaMemcpy devTree failed.");
 
 	float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
-	std::cout << "Done. Tirangles: " << trigIndices->size() << ". Nodes: " << tree.size() << ". Time cost : " << runningTime << " seconds." << std::endl;
+	std::cout << "Done. Time cost : " << runningTime << " seconds." << std::endl;
 }
 
+// reference: https://www.pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies
 int BVH::buildNode(
-	int layer, int maxLayer, std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs, BoundingBox bbox) {
-	if (trigs->size() == 0) return -1;
-	if (trigs->size() > TERMINATE_NUM && layer != maxLayer && bbox.halfExtent.x > FLT_EPSILON && bbox.halfExtent.y > FLT_EPSILON) {
+	int layer, int maxLayer, std::vector<Triangle>::iterator& trigStart, std::vector<Triangle>::iterator& trigEnd, Bound bbox) {
+	int trigSize = trigEnd - trigStart + 1;
+	if (trigSize == 0) return -1;
+	if (trigSize > TERMINATE_NUM && 
+		layer != maxLayer && 
+		bbox.halfExtent.x > BVH_EPSILON && 
+		bbox.halfExtent.y > BVH_EPSILON && 
+		bbox.halfExtent.z > BVH_EPSILON) {
 
-		//glm::vec3 eps{ FLT_EPSILON, FLT_EPSILON, FLT_EPSILON };
-		glm::vec3 eps{ 1e-6f, 1e-6f, 1e-6f };
-		glm::vec3 halfX = glm::vec3{ bbox.halfExtent.x, 0.f, 0.f };
-		glm::vec3 halfY = glm::vec3{ 0.f, bbox.halfExtent.y, 0.f };
-		glm::vec3 halfZ = glm::vec3{ 0.f, 0.f, bbox.halfExtent.z };
-
-		// prepare children's bounding boxes
-
-		BoundingBox b0{}; updateBoundingBox(bbox.min - eps, bbox.center + eps, &b0);
-		BoundingBox b1{}; updateBoundingBox(b0.min + halfZ - eps, b0.max + halfZ + eps, &b1);
-		BoundingBox b2{}; updateBoundingBox(b0.min + halfY - eps, b0.max + halfY + eps, &b2);
-		BoundingBox b3{}; updateBoundingBox(b0.min + halfY + halfZ - eps, b0.max + halfY + halfZ + eps, &b3);
-
-		BoundingBox b4{}; updateBoundingBox(b0.min + halfX - eps, b0.max + halfX + eps, &b4);
-		BoundingBox b5{}; updateBoundingBox(b4.min + halfZ - eps, b4.max + halfZ + eps, &b5);
-		BoundingBox b6{}; updateBoundingBox(b4.min + halfY - eps, b4.max + halfY + eps, &b6);
-		BoundingBox b7{}; updateBoundingBox(b4.min + halfY + halfZ - eps, b4.max + halfY + halfZ + eps, &b7);
-
-		// store children's triangles
-		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs0 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
-		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs1 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
-		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs2 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
-		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs3 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
-		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs4 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
-		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs5 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
-		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs6 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
-		std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigs7 = std::make_shared<std::list<std::pair<int, Triangle*>>>();
-
-		// find triangles
-		for (auto it = trigs->begin(); it != trigs->end(); it++) {
-			Triangle t = scene.trigBuf[it->first];
-			if (tirgBoxIntersect(t, b0)) {
-				trigs0->push_back(*it);
-			}
-			if (tirgBoxIntersect(t, b1)) {
-				trigs1->push_back(*it);
-			}
-			if (tirgBoxIntersect(t, b2)) {
-				trigs2->push_back(*it);
-			}
-			if (tirgBoxIntersect(t, b3)) {
-				trigs3->push_back(*it);
-			}
-			if (tirgBoxIntersect(t, b4)) {
-				trigs4->push_back(*it);
-			}
-			if (tirgBoxIntersect(t, b5)) {
-				trigs5->push_back(*it);
-			}
-			if (tirgBoxIntersect(t, b6)) {
-				trigs6->push_back(*it);
-			}
-			if (tirgBoxIntersect(t, b7)) {
-				trigs7->push_back(*it);
-			}
+		Bound centerBox{};
+		for (auto it = trigStart; it <= trigEnd; it++) {
+			updateBoundingBox(it->bbox.center, &centerBox);
 		}
 
-		trigs.reset();
+		int axis;
+		if (centerBox.halfExtent.x >= centerBox.halfExtent.y && centerBox.halfExtent.x >= centerBox.halfExtent.z) {
+			axis = 0;
+		}
+		else if (centerBox.halfExtent.y >= centerBox.halfExtent.x && centerBox.halfExtent.y >= centerBox.halfExtent.z) {
+			axis = 1;
+		}
+		else {
+			axis = 2;
+		}
+		Bound b0, b1;
+		std::vector<Triangle>::iterator middle;
 
-		Node node{
-			0,
-			{0},
-			{},
-			{},
-			-1,
-			bbox
+		auto comparator = [&, axis](const Triangle& a, const Triangle& b) {
+			if (axis == 0) return a.bbox.center.x < b.bbox.center.x;
+			if (axis == 1) return a.bbox.center.y < b.bbox.center.y;
+			return a.bbox.center.z < b.bbox.center.z;
 		};
 
-		int child;
-		child = buildNode(layer + 1, maxLayer, trigs0, b0);
-		if (child >= 0) {
-			node.children[node.size] = child;
-			node.childrenMin[node.size] = b0.min;
-			node.childrenMax[node.size] = b0.max;
-			node.size++;
+		std::sort(trigStart, trigEnd+1, comparator);
+
+		auto area = [&, axis](const Bound& bbox) {
+			if (axis == 0) return bbox.halfExtent.y * bbox.halfExtent.z;
+			if (axis == 1) return bbox.halfExtent.x * bbox.halfExtent.z;
+			if (axis == 2) return bbox.halfExtent.x * bbox.halfExtent.y;
+		};
+
+		if (trigSize > BUCKET_NUM) {
+			Bucket buckets[BUCKET_NUM] = {};
+			for (int i = 0; i < BUCKET_NUM; i++) {
+				auto& bucket = buckets[i];
+				if (i == 0) bucket.begin = trigStart;
+				else bucket.begin = buckets[i - 1].end + 1;
+				auto it = bucket.begin;
+
+				if (i == BUCKET_NUM - 1) {
+					bucket.end = trigEnd;
+				}
+				else {
+					bucket.end = trigStart + trigSize / BUCKET_NUM * (i + 1);
+				}
+				while (it != bucket.end) {
+					updateBoundingBox(it->bbox.min, &bucket.bbox);
+					updateBoundingBox(it->bbox.max, &bucket.bbox);
+					it++;
+				}
+				updateBoundingBox(it->bbox.min, &bucket.bbox);
+				updateBoundingBox(it->bbox.max, &bucket.bbox);
+			}
+
+			float minRatio = FLT_MAX;
+			for (int i = 0; i < BUCKET_NUM - 1; i++) {
+				Bound tmp{}, tmp2{};
+				for (int j = 0; j <= i; j++) {
+					updateBoundingBox(buckets[j].bbox.min, &tmp);
+					updateBoundingBox(buckets[j].bbox.max, &tmp);
+				}
+				for (int j = i + 1; j < BUCKET_NUM; j++) {
+					updateBoundingBox(buckets[j].bbox.min, &tmp2);
+					updateBoundingBox(buckets[j].bbox.max, &tmp2);
+				}
+				float area1 = area(tmp), area2 = area(tmp2);
+				float ratio = fmaxf(area1, area2) / fminf(area1, area2);
+				if (ratio < minRatio) {
+					minRatio = ratio;
+					b0 = tmp;
+					b1 = tmp2;
+					middle = buckets[i].end;
+				}
+			}
+		}
+		else {
+			for (auto i = trigStart; i < trigEnd; i++) {
+				float minRatio = FLT_MAX;
+				Bound tmp{}, tmp2{};
+				for (auto j = trigStart; j <= i; j++) {
+					updateBoundingBox(j->bbox.min, &tmp);
+					updateBoundingBox(j->bbox.max, &tmp);
+				}
+				for (auto j = i + 1; j <= trigEnd; j++) {
+					updateBoundingBox(j->bbox.min, &tmp2);
+					updateBoundingBox(j->bbox.max, &tmp2);
+				}
+				float area1 = area(tmp), area2 = area(tmp2);
+				float ratio = fmaxf(area1, area2) / fminf(area1, area2);
+				if (ratio < minRatio) {
+					minRatio = ratio;
+					b0 = tmp;
+					b1 = tmp2;
+					middle = i;
+				}
+			}
 		}
 
-		child = buildNode(layer + 1, maxLayer, trigs1, b1);
-		if (child >= 0) {
-			node.children[node.size] = child;
-			node.childrenMin[node.size] = b1.min;
-			node.childrenMax[node.size] = b1.max;
-			node.size++;
+		Node node{
+			false,
+			buildNode(layer + 1, maxLayer, trigStart, middle, b0),
+			buildNode(layer + 1, maxLayer, middle + 1, trigEnd, b1),
+			bbox.min,
+			bbox.max,
+			b0.min,
+			b0.max,
+			b1.min,
+			b1.max
+		};
+
+		//generateBoundingBox(b0.min - BVH_EPSILON, b0.max + BVH_EPSILON, &b0);
+		//generateBoundingBox(b1.min - BVH_EPSILON, b1.max + BVH_EPSILON, &b1);
+
+		if (node.left == -1 && node.right == -1) {
+			return -1;
 		}
 
-		child = buildNode(layer + 1, maxLayer, trigs2, b2);
-		if (child >= 0) {
-			node.children[node.size] = child;
-			node.childrenMin[node.size] = b2.min;
-			node.childrenMax[node.size] = b2.max;
-			node.size++;
+		if (node.left != -1 && node.right == -1) {
+			return node.right;
 		}
 
-		child = buildNode(layer + 1, maxLayer, trigs3, b3);
-		if (child >= 0) {
-			node.children[node.size] = child;
-			node.childrenMin[node.size] = b3.min;
-			node.childrenMax[node.size] = b3.max;
-			node.size++;
+		if (node.left == -1 && node.right != -1) {
+			return node.left;
 		}
 
-		child = buildNode(layer + 1, maxLayer, trigs4, b4);
-		if (child >= 0) {
-			node.children[node.size] = child;
-			node.childrenMin[node.size] = b4.min;
-			node.childrenMax[node.size] = b4.max;
-			node.size++;
-		}
-
-		child = buildNode(layer + 1, maxLayer, trigs5, b5);
-		if (child >= 0) {
-			node.children[node.size] = child;
-			node.childrenMin[node.size] = b5.min;
-			node.childrenMax[node.size] = b5.max;
-			node.size++;
-		}
-
-		child = buildNode(layer + 1, maxLayer, trigs6, b6);
-		if (child >= 0) {
-			node.children[node.size] = child;
-			node.childrenMin[node.size] = b6.min;
-			node.childrenMax[node.size] = b6.max;
-			node.size++;
-		}
-
-		child = buildNode(layer + 1, maxLayer, trigs7, b7);
-		if (child >= 0) {
-			node.children[node.size] = child;
-			node.childrenMin[node.size] = b7.min;
-			node.childrenMax[node.size] = b7.max;
-			node.size++;
-		}
-
-		if (node.size > 0) {
-			tree.push_back(std::move(node));
-			return tree.size() - 1;
-		}
-		if (node.size == 1) {
-			return node.children[0];
-		}
-		else return -1;
+		tree.push_back(std::move(node));
+		return tree.size() - 1;
 	}
 	else {
 		// construct a leaf node
 		Node node{
-			trigs->size(),
-			{0},
-			{},
-			{},
-			trigIndices->size(),
-			bbox
+			true,
+			trigStart - scene.trigBuf.begin(),
+			trigEnd - scene.trigBuf.begin(),
+			bbox.min,
+			bbox.max
 		};
-		trigIndices->splice(trigIndices->end(), *trigs);
 		tree.push_back(std::move(node));
+		//std::cout << layer << " " << trigSize << std::endl;
 		return tree.size() - 1;
 	}
 }
