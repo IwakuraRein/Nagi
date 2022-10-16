@@ -4,8 +4,6 @@
 #include "common.cuh"
 #include "intersection.cuh"
 
-#define MAX_TREE_DEPTH 24
-#define TERMINATE_NUM 1
 #define BVH_EPSILON 1e-6f
 #define BUCKET_NUM 16
 
@@ -13,10 +11,16 @@ namespace nagi {
 
 class BVH {
 public:
-	struct Node {
+	struct OriginalNode {
 		bool leaf;
-		int left, right; 
-		glm::vec3 min, max, leftMin, leftMax, rightMin, rightMax;
+		bool leftNode;
+		int parent, left, right; 
+		Bound bbox;
+	};
+	struct Node {
+		int trigIdx;
+		int missLink;
+		glm::vec3 min, max;
 	};
 	struct Bucket {
 		Bound bbox;
@@ -29,13 +33,13 @@ public:
 	void operator=(const BVH&) = delete;
 
 	void build();
-	int BVH::buildNode(
-		int layer, int maxLayer, std::vector<Triangle>::iterator& trigStart, std::vector<Triangle>::iterator& trigEnd, Bound bbox);
+	int BVH::buildNode(std::vector<Triangle>::iterator& trigStart, std::vector<Triangle>::iterator& trigEnd, Bound bbox, bool leftNode);
+	void convertTreeNode(const OriginalNode& orig);
 	
 	Scene& scene;
+	std::vector<OriginalNode> originalTree;
 	std::vector<Node> tree;
 	Node* devTree{ nullptr };
-	int treeRoot;
 	//int leafTrigs{ 0 };
 	//std::shared_ptr<std::list<std::pair<int, Triangle*>>> trigIndices;
 	//int* devTreeTrigIdx{ nullptr };

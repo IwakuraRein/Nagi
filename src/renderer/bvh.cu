@@ -18,17 +18,12 @@ void BVH::build() {
 	timer = std::chrono::high_resolution_clock::now();
 	std::cout << "Building BVH... ";
 
- 	treeRoot = buildNode(0, MAX_TREE_DEPTH, scene.trigBuf.begin(), scene.trigBuf.end()-1, scene.bbox);
-
-	//cudaMalloc((void**)&devTreeTrigIdx, sizeof(int) * trigIndices->size());
-	//checkCUDAError("cudaMalloc devTreeTrigIdx failed.");
-
-	//int i = 0;
-	//for (auto it = trigIndices->begin(); it != trigIndices->end(); it++) {
-	//	cudaMemcpy(devTreeTrigIdx + i, &it->first, sizeof(int), cudaMemcpyHostToDevice);
-	//	i++;
-	//}
-	//checkCUDAError("cudaMemcpy devTreeTrigIdx failed.");
+ 	int root = buildNode(scene.trigBuf.begin(), scene.trigBuf.end()-1, scene.bbox, false);
+	
+	tree.reserve(originalTree.size());
+	for (auto& orig : originalTree) {
+		convertTreeNode(orig);
+	}
 
 	cudaMalloc((void**)&devTree, sizeof(Node) * tree.size());
 	checkCUDAError("cudaMalloc devTree failed.");
@@ -42,15 +37,9 @@ void BVH::build() {
 
 // reference: https://www.pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies
 int BVH::buildNode(
-	int layer, int maxLayer, std::vector<Triangle>::iterator& trigStart, std::vector<Triangle>::iterator& trigEnd, Bound bbox) {
+	std::vector<Triangle>::iterator& trigStart, std::vector<Triangle>::iterator& trigEnd, Bound bbox, bool leftNode) {
 	int trigSize = trigEnd - trigStart + 1;
-	if (trigSize == 0) return -1;
-	if (trigSize > TERMINATE_NUM && 
-		layer != maxLayer && 
-		bbox.halfExtent.x > BVH_EPSILON && 
-		bbox.halfExtent.y > BVH_EPSILON && 
-		bbox.halfExtent.z > BVH_EPSILON) {
-
+	if (trigSize > 1) {
 		Bound centerBox{};
 		for (auto it = trigStart; it <= trigEnd; it++) {
 			updateBoundingBox(it->bbox.center, &centerBox);
@@ -150,49 +139,65 @@ int BVH::buildNode(
 			}
 		}
 
-		Node node{
+		//generateBoundingBox(bbox.min - BVH_EPSILON, bbox.max + BVH_EPSILON, &bbox);
+		OriginalNode node{
 			false,
-			buildNode(layer + 1, maxLayer, trigStart, middle, b0),
-			buildNode(layer + 1, maxLayer, middle + 1, trigEnd, b1),
-			bbox.min,
-			bbox.max,
-			b0.min,
-			b0.max,
-			b1.min,
-			b1.max
+			leftNode,
+			-1,
+			-1,
+			-1,
+			bbox
 		};
 
-		//generateBoundingBox(b0.min - BVH_EPSILON, b0.max + BVH_EPSILON, &b0);
-		//generateBoundingBox(b1.min - BVH_EPSILON, b1.max + BVH_EPSILON, &b1);
+		originalTree.push_back(std::move(node));
+		int idx = originalTree.size() - 1;
+		int left = buildNode(trigStart, middle, b0, true);
+		originalTree[idx].left = left;
+		int right = buildNode(middle + 1, trigEnd, b1, false);
+		originalTree[idx].right = right;
 
-		if (node.left == -1 && node.right == -1) {
-			return -1;
-		}
-
-		if (node.left != -1 && node.right == -1) {
-			return node.right;
-		}
-
-		if (node.left == -1 && node.right != -1) {
-			return node.left;
-		}
-
-		tree.push_back(std::move(node));
-		return tree.size() - 1;
+		originalTree[left].parent = idx;
+		originalTree[right].parent = idx;
+		return idx;
 	}
 	else {
 		// construct a leaf node
-		Node node{
+		OriginalNode node{
 			true,
+			leftNode,
+			-1,
 			trigStart - scene.trigBuf.begin(),
-			trigEnd - scene.trigBuf.begin(),
-			bbox.min,
-			bbox.max
+			trigStart - scene.trigBuf.begin(),
+			bbox
 		};
-		tree.push_back(std::move(node));
-		//std::cout << layer << " " << trigSize << std::endl;
-		return tree.size() - 1;
+		originalTree.push_back(std::move(node));
+		return originalTree.size() - 1;
 	}
+}
+void BVH::convertTreeNode(const OriginalNode& orig) {
+	int missLink;
+	if (!orig.leaf) {
+		missLink = -1;
+		if (orig.leftNode && orig.parent >= 0) {
+			missLink = originalTree[orig.parent].right;
+		}
+		if (!orig.leftNode && orig.parent >= 0) {
+			auto& node = originalTree[orig.parent];
+			while (!node.leftNode) {
+				if (node.parent >= 0) node = originalTree[node.parent];
+				else break;
+			}
+			if (node.leftNode && node.parent >= 0) missLink = originalTree[node.parent].right;
+		}
+	}
+	else missLink = tree.size()+1;
+	Node node{
+		orig.leaf? orig.left : -1,
+		missLink,
+		orig.bbox.min,
+		orig.bbox.max
+	};
+	tree.push_back(std::move(node));
 }
 
 }

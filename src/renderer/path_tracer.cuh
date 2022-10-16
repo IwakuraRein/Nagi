@@ -56,7 +56,7 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 // brute force
 __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out);
 // oct tree bvh
-__global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, BVH::Node root, BVH::Node* treeBuf, Triangle* trigBuf, IntersectInfo* out);
+__global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, int treeSize, BVH::Node* treeBuf, Triangle* trigBuf, IntersectInfo* out);
 __global__ void kernShadeLightSource(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
 __global__ void kernShadeSpecular(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);

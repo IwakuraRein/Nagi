@@ -154,13 +154,9 @@ void PathTracer::iterate() {
 	checkCUDAError("kernInitializeRays failed.");
 	int bounce = 0;
 	int remainingRays = window.pixels;
-	float lastIntersectTime{ 0.f };
-	int lastRays{ scene.window.pixels };
 	while (true) {
 		remainingRays = intersectionTest(remainingRays);
 		bounce++;
-		std::cout << "    Intersection test "<< bounce <<": " << intersectionTime-lastIntersectTime << " ms. Rays: "<< lastRays << std::endl;
-		lastRays = remainingRays; lastIntersectTime = intersectionTime;
 
 		//std::cout << remainingRays << " ";
 		if (remainingRays <= 0) break;
@@ -285,7 +281,7 @@ __global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Obje
 }
 
 __global__ void kernBVHIntersectTest(
-	int rayNum, Path* rayPool, BVH::Node root, BVH::Node* treeBuf, Triangle* trigBuf, IntersectInfo* out) {
+	int rayNum, Path* rayPool, int treeSize, BVH::Node* treeBuf, Triangle* trigBuf, IntersectInfo* out) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
@@ -294,66 +290,28 @@ __global__ void kernBVHIntersectTest(
 	Triangle pickedTrig;
 	int pickedMtlIdx{ -1 };
 	float dist;
-	float minTrigD{ FLT_MAX }, minTrigD2{ FLT_MAX };
-
-	BVH::Node stack[MAX_TREE_DEPTH + 1];
-	int searched[MAX_TREE_DEPTH + 1] = { 0 };
-	int ptr = 0;
-	stack[0] = root;
-
-	glm::vec3 childMin, childMax;
-	int child;
-	while (ptr >= 0) {
-		BVH::Node& node = stack[ptr];
-		if (!node.leaf) {
-			if (searched[ptr] < 2) {
-				if (searched[ptr] == 0) {
-					childMin = node.leftMin;
-					childMax = node.leftMax;
-					child = node.left;
-				}
-				if (searched[ptr] == 1) {
-					childMin = node.rightMin;
-					childMax = node.rightMax;
-					child = node.right;
-				}
-				searched[ptr]++;
-				if (rayBoxIntersect(r, childMin, childMax, dist)) {
-					if (dist < minTrigD) {
-						ptr++;
-						stack[ptr] = treeBuf[child];
-						searched[ptr] = 0;
-						minTrigD2 = FLT_MAX;
-						continue;
-					}
-				}
-			}
+	float minTrigD{ FLT_MAX };
+	int nodeIdx = 0;
+	while (nodeIdx < treeSize && nodeIdx >= 0) {
+		BVH::Node node = treeBuf[nodeIdx];
+		if (rayBoxIntersect(r, node.min, node.max, dist) && dist < minTrigD) {
+			if (dist >= minTrigD && node.trigIdx < 0) nodeIdx = node.missLink;
 			else {
-				ptr--;
-				minTrigD2 = FLT_MAX;
-			}
-		}
-		else {
-			for (int i = node.left; i <= node.right; i++) {
-				Triangle trig = trigBuf[i];
-				if (rayBoxIntersect(r, trig.bbox, dist)) {
-					if (dist < minTrigD2) {
-						if (rayTrigIntersect(r, trig, dist, baryCentric)) {
-							//if (glm::intersectRayTriangle(r.origin, r.dir, trig.vert0.position, trig.vert1.position, trig.vert2.position, baryCentric, trigDist)) {
-							if (dist > 0.f && dist < minTrigD) {
-								minTrigD = dist;
-								minTrigD2 = dist;
-								pickedBaryCentric = baryCentric;
-								pickedTrig = trig;
-								pickedMtlIdx = trig.mtlIdx;
-							}
+				if (node.trigIdx >= 0) {
+					Triangle trig = trigBuf[node.trigIdx];
+					if (rayTrigIntersect(r, trig, dist, baryCentric)) {
+						if (dist > 0.f && dist < minTrigD) {
+							minTrigD = dist;
+							pickedBaryCentric = baryCentric;
+							pickedTrig = trig;
+							pickedMtlIdx = trig.mtlIdx;
 						}
 					}
 				}
+				nodeIdx++;
 			}
-			ptr--;
-			minTrigD2 = FLT_MAX;
 		}
+		else nodeIdx = node.missLink;
 	}
 	IntersectInfo result;
 	result.mtlIdx = pickedMtlIdx;
@@ -373,7 +331,7 @@ int PathTracer::intersectionTest(int rayNum) {
 	//kernTrigIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, 0, scene.trigBuf.size()-1, devTrigBuf, devResults1);
 	//kernObjIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, devTrigBuf, devResults1);
 	kernBVHIntersectTest<<<blocksPerGrid, BLOCK_SIZE>>> (
-		rayNum, devRayPool1, bvh.tree[bvh.treeRoot], bvh.devTree, devTrigBuf, devResults1);
+		rayNum, devRayPool1, bvh.tree.size(), bvh.devTree, devTrigBuf, devResults1);
 	intersectionTime += tok();
 	checkCUDAError("kernBVHIntersectTest failed.");
 
