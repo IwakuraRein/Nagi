@@ -154,10 +154,13 @@ void PathTracer::iterate() {
 	checkCUDAError("kernInitializeRays failed.");
 	int bounce = 0;
 	int remainingRays = window.pixels;
+	float lastIntersectTime{ 0.f };
+	int lastRays{ scene.window.pixels };
 	while (true) {
 		remainingRays = intersectionTest(remainingRays);
-		if (bounce == 0) std::cout << "    First intersection test: " << intersectionTime << " ms." << std::endl;
 		bounce++;
+		std::cout << "    Intersection test "<< bounce <<": " << intersectionTime-lastIntersectTime << " ms. Rays: "<< lastRays << std::endl;
+		lastRays = remainingRays; lastIntersectTime = intersectionTime;
 
 		//std::cout << remainingRays << " ";
 		if (remainingRays <= 0) break;
@@ -290,10 +293,8 @@ __global__ void kernBVHIntersectTest(
 	glm::vec2 pickedBaryCentric, baryCentric;
 	Triangle pickedTrig;
 	int pickedMtlIdx{ -1 };
-	float trigDist;
-	float minTrigD{ FLT_MAX };
-	float boxD;
-	//Bound lastTrigBox{};
+	float dist;
+	float minTrigD{ FLT_MAX }, minTrigD2{ FLT_MAX };
 
 	BVH::Node stack[MAX_TREE_DEPTH + 1];
 	int searched[MAX_TREE_DEPTH + 1] = { 0 };
@@ -317,37 +318,41 @@ __global__ void kernBVHIntersectTest(
 					child = node.right;
 				}
 				searched[ptr]++;
-				if (rayBoxIntersect(r, childMin, childMax, boxD)) {
-					if (boxD < minTrigD) {
+				if (rayBoxIntersect(r, childMin, childMax, dist)) {
+					if (dist < minTrigD) {
 						ptr++;
 						stack[ptr] = treeBuf[child];
 						searched[ptr] = 0;
+						minTrigD2 = FLT_MAX;
 						continue;
 					}
 				}
 			}
-			else ptr--;
+			else {
+				ptr--;
+				minTrigD2 = FLT_MAX;
+			}
 		}
 		else {
 			for (int i = node.left; i <= node.right; i++) {
 				Triangle trig = trigBuf[i];
-				if (rayBoxIntersect(r, trig.bbox, trigDist)) {
-					//if (trigDist >= minTrigD) {
-					//	if (!boxBoxIntersect(trig.bbox, lastTrigBox)) continue;
-					//}
-					if (rayTrigIntersect(r, trig, trigDist, baryCentric)) {
-					//if (glm::intersectRayTriangle(r.origin, r.dir, trig.vert0.position, trig.vert1.position, trig.vert2.position, baryCentric, trigDist)) {
-						if (trigDist > 0.f && trigDist < minTrigD) {
-							minTrigD = trigDist;
-							pickedBaryCentric = baryCentric;
-							pickedTrig = trig;
-							pickedMtlIdx = trig.mtlIdx;
-							//lastTrigBox = trig.bbox;
+				if (rayBoxIntersect(r, trig.bbox, dist)) {
+					if (dist < minTrigD2) {
+						if (rayTrigIntersect(r, trig, dist, baryCentric)) {
+							//if (glm::intersectRayTriangle(r.origin, r.dir, trig.vert0.position, trig.vert1.position, trig.vert2.position, baryCentric, trigDist)) {
+							if (dist > 0.f && dist < minTrigD) {
+								minTrigD = dist;
+								minTrigD2 = dist;
+								pickedBaryCentric = baryCentric;
+								pickedTrig = trig;
+								pickedMtlIdx = trig.mtlIdx;
+							}
 						}
 					}
 				}
 			}
 			ptr--;
+			minTrigD2 = FLT_MAX;
 		}
 	}
 	IntersectInfo result;
