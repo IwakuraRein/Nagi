@@ -62,7 +62,8 @@ inline __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& norma
 	return glm::normalize(T * wo_tan.x + B * wo_tan.y + normal * wo_tan.z);
 }
 
-inline __device__ __host__ glm::vec3 refractSampler(const float& ior, const glm::vec3& wi, glm::vec3 n, thrust::default_random_engine& rng) {
+// pdf = 1
+inline __device__ __host__ glm::vec3 refractSampler(const float& ior, const glm::vec3& wi, glm::vec3 n, /*float& pdf,*/ thrust::default_random_engine& rng) {
 	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 	float rnd = u01(rng);
 	float invEta, iorI, iorT;
@@ -103,55 +104,64 @@ inline __device__ __host__ glm::vec3 reflectSampler(
 	float hv = glm::dot(n, -wi);
 	float F = metallic + (1.f - metallic) * powf(1.f - fmaxf(hv, 0.f), 5.f);
 	float pdf2;
-	glm::vec3 wo = cosHemisphereSampler(n, pdf2, rng);
-	
-	if (rnd < F) wo = glm::reflect(wi, n);
+	glm::vec3 wo;
+	if (rnd > F) {
+		wo = cosHemisphereSampler(n, pdf2, rng);
+	}
+	else {
+		wo = glm::reflect(wi, n);
+		float cosine = fmaxf(glm::dot(wo, n), 0.f);
+		pdf2 = sqrtf(1 - cosine * cosine) * INV_PI;
+	}
+
 	pdf = pdf2 * (1 - F) + F;
 	return wo;
-	//float F = metallic + (1.f - metallic) * powf(1.f - fmaxf(hv, 0.f), 5.f);
-	//if (rnd < F) {
-	//	pdf = 1.f / F;
-	//	return glm::reflect(wi, n);
-	//}
-	//else {
-	//	auto wo = cosHemisphereSampler(n, pdf, rng);
-	//	pdf /= (1 - F);
-	//	return wo;
-	//}
 }
 
 // reference: https://agraphicsguy.wordpress.com/2015/11/01/sampling-microfacet-brdf/
 inline __device__ __host__ glm::vec3 ggxImportanceSampler(
 	const float& alpha, const float& metallic, const glm::vec3 & wi, const glm::vec3 & normal, float& pdf, thrust::default_random_engine& rng){
 	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
-	float rnd = u01(rng);
 
-	float a2 = alpha * alpha;
-	float phi = rnd * TWO_PI;
-	rnd = u01(rng);
-	float cosTheta = glm::clamp(sqrtf((1.f - rnd) / (rnd * (a2 - 1.f) + 1)), 0.f, 1.f);
-	float cosTheta2 = cosTheta * cosTheta;
-	float sinTheta = sqrtf(1.f - cosTheta2);
-
-	glm::vec3 T = getDifferentDir(normal);
-	T = glm::normalize(glm::cross(T, normal));
-	glm::vec3 B = glm::normalize(glm::cross(T, normal));
-
-	glm::vec3 h{ T * glm::cos(phi) * sinTheta + B * glm::sin(phi) * sinTheta + normal * cosTheta };
-	h = glm::normalize(h);
-
-	float denom = ((a2 - 1) * cosTheta2 + 1);
-	float pdf1 = (a2)*INV_PI / (denom * denom * 4 * fmaxf(glm::dot(-wi, h), 0.f) + FLT_EPSILON);
-
-	float pdf2;
-	glm::vec3 wo = cosHemisphereSampler(normal, pdf2, rng);
-
-	rnd = u01(rng);
 	float s = 0.5f + metallic / 2.f;
 	//float s = metallic;
-	pdf = s * pdf1 + (1.f - s) * pdf2;
+	float pdf1, pdf2;
+	glm::vec3 wo;
+	float a2 = alpha * alpha;
 
-	if (rnd < s) wo = glm::reflect(wi, h);
+	float rnd = u01(rng);
+	if (rnd < s) {
+		rnd = u01(rng);
+		float phi = rnd * TWO_PI;
+		rnd = u01(rng);
+		float cosTheta = glm::clamp(sqrtf((1.f - rnd) / (rnd * (a2 - 1.f) + 1)), 0.f, 1.f);
+		float cosTheta2 = cosTheta * cosTheta;
+		float sinTheta = sqrtf(1.f - cosTheta2);
+
+		glm::vec3 T = getDifferentDir(normal);
+		T = glm::normalize(glm::cross(T, normal));
+		glm::vec3 B = glm::normalize(glm::cross(T, normal));
+		glm::vec3 h{ T * glm::cos(phi) * sinTheta + B * glm::sin(phi) * sinTheta + normal * cosTheta };
+		h = glm::normalize(h);
+		wo = glm::reflect(wi, h);
+
+		// pdf of ggx
+		float denom = ((a2 - 1) * cosTheta2 + 1);
+		pdf1 = (a2)*INV_PI / (denom * denom * 4 * fmaxf(glm::dot(-wi, h), 0.f) + FLT_EPSILON);
+
+		// pdf of cosine hemisphere
+		float cosine2 = fmaxf(glm::dot(wo, normal), 0.f);
+		pdf2 = sqrtf(1 - cosine2 * cosine2) * INV_PI;
+	}
+	else {
+		wo = cosHemisphereSampler(normal, pdf2, rng);
+		glm::vec3 h = halfway(-wi, wo);
+		float cosTheta = glm::dot(wo, normal);
+		float denom = ((a2 - 1) * cosTheta * cosTheta + 1);
+		pdf1 = (a2)*INV_PI / (denom * denom * 4 * fmaxf(glm::dot(-wi, h), 0.f) + FLT_EPSILON);
+	}
+
+	pdf = s * pdf1 + (1.f - s) * pdf2;
 
 	return wo;
 }
