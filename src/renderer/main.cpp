@@ -26,17 +26,16 @@ int main(int argc, char* argv[]) {
 	}
 	try {
 		std::unique_ptr<SceneLoader> sceneLoader = std::make_unique<SceneLoader>(scene, argv[1]);
-		sceneLoader->printDetails = true;
 		sceneLoader->load();
 		std::unique_ptr<BVH> bvh = std::make_unique<BVH>(scene);
 		bvh->build();
 		std::unique_ptr<PathTracer> pathTracer = std::make_unique<PathTracer>(scene, *bvh);
-		pathTracer->printDetails = true;
 
 		pathTracer->initialize();
 		std::cout << "Start ray tracing..." << std::endl;
 		while(!pathTracer->finish())
 			pathTracer->iterate();
+		std::cout << "Ray tracing finished." << std::endl;
 
 		auto frameBuf = pathTracer->getFrameBuffer();
 		saveHDR(scene.window, frameBuf.get(), 3, saveDir + "/nagi_result_");
@@ -50,6 +49,7 @@ int main(int argc, char* argv[]) {
 			denoiser.reset(nullptr);
 		}
 
+#ifdef DEB_INFO
 		auto normal = pathTracer->getNormalBuffer();
 		for (int i = 0; i < scene.window.pixels * 3; i++) {
 			normal[i] = (normal[i] + 1.f) / 2.f;
@@ -59,6 +59,7 @@ int main(int argc, char* argv[]) {
 		saveHDR(scene.window, albedo.get(), 3, saveDir + "/albedo_");
 		auto depth = pathTracer->getDepthBuffer();
 		saveHDR(scene.window, depth.get(), 1, saveDir + "/depth_");
+#endif // DEB_INFO
 
 		pathTracer.reset(nullptr);
 		bvh.reset(nullptr);

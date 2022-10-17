@@ -70,7 +70,7 @@ nlohmann::json SceneLoader::readJson(const std::string& filePath) {
 }
 
 void SceneLoader::load() {
-	std::cout << "Loading scene " << filePath << "...";
+	std::cout << "Loading scene " << filePath << "..." << std::endl;
 	if (!doesFileExist(filePath)) {
 		std::string msg{ "Error: File " };
 		msg += filePath;
@@ -86,11 +86,13 @@ void SceneLoader::load() {
 	loadMaterials();
 	loadObjects();
 
-	std::cout << " Done. Triangle count: " << scene.trigBuf.size() << std::endl;
+	std::cout << "Scene loading finished. Triangle count: " << scene.trigBuf.size() << std::endl;
 }
 
 void SceneLoader::loadConfig() {
-	if (printDetails) std::cout << "  Loading configuration... ";
+#ifdef DEB_INFO
+	std::cout << "  Loading configuration... ";
+#endif // DEB_INFO
 	Configuration config{};
 	for (auto& item : jFile["graphics"].items()) {
 		if (item.key() == "resolution") {
@@ -125,7 +127,10 @@ void SceneLoader::loadConfig() {
 		}
 	}
 	scene.config = config;
-	if (printDetails) std::cout << " done." << std::endl;
+
+#ifdef DEB_INFO
+	std::cout << " done." << std::endl;
+#endif // DEB_INFO
 }
 
 void SceneLoader::loadMaterials() {
@@ -133,7 +138,9 @@ void SceneLoader::loadMaterials() {
 	scene.mtlTypes = 0;
 	int idx = 0;
 	for (auto& material : jFile["materials"].items()) {
-		if (printDetails) std::cout << "  Loading material " << material.key() << "...";
+#ifdef DEB_INFO
+		std::cout << "  Loading material " << material.key() << "...";
+#endif // DEB_INFO
 		auto& items = material.value();
 		Material mtl{};
 		{
@@ -270,7 +277,9 @@ void SceneLoader::loadMaterials() {
 		scene.mtlBuf[idx] = std::move(mtl);
 		mtlIndices.emplace(material.key(), idx);
 		idx++;
-		if (printDetails) std::cout << " done." << std::endl;
+#ifdef DEB_INFO
+		std::cout << " done." << std::endl;
+#endif // DEB_INFO
 	}
 }
 
@@ -278,7 +287,9 @@ void SceneLoader::loadObjects() {
 	scene.objBuf.resize(jFile["objects"].size());
 	int idx = 0;
 	for (auto& object : jFile["objects"].items()) {
-		if (printDetails) std::cout << "  Loading object " << object.key() << "...";
+#ifdef DEB_INFO
+		std::cout << "  Loading object " << object.key() << "...";
+#endif // DEB_INFO
 		auto& items = object.value();
 		Object obj;
 		{
@@ -333,7 +344,9 @@ void SceneLoader::loadObjects() {
 			else throw std::runtime_error("Error: Object must specify its mesh.");
 		}
 		scene.objBuf[idx++] = std::move(obj);
-		if (printDetails) std::cout << " done." << std::endl;
+#ifdef DEB_INFO
+		std::cout << " done." << std::endl;
+#endif // DEB_INFO
 	}
 
 	scene.bbox.min -= /*FLT_EPSILON*/0.001f;
@@ -347,7 +360,9 @@ void SceneLoader::loadObjects() {
 }
 
 void SceneLoader::loadCameras() {
-	if (printDetails) std::cout << "  Loading camera... ";
+#ifdef DEB_INFO
+	std::cout << "  Loading camera... ";
+#endif // DEB_INFO
 	Camera cam{};
 	auto& camera = jFile["camera"];
 	if (hasItem(camera, "position")) {
@@ -407,7 +422,9 @@ void SceneLoader::loadCameras() {
 
 	scene.cam = cam;
 
-	if (printDetails) std::cout << " done." << std::endl;
+#ifdef DEB_INFO
+	std::cout << " done." << std::endl;
+#endif // DEB_INFO
 }
 
 std::pair<glm::vec3, glm::vec3> SceneLoader::calcTangent(Triangle& t) {

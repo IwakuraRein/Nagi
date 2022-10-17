@@ -146,9 +146,17 @@ PathTracer::~PathTracer() {
 
 // intersection test -> compact rays -> sort rays according to material -> compute color -> compact rays -> intersection test...
 void PathTracer::iterate() {
-	std::chrono::steady_clock::time_point timer;
+
+#ifdef DEB_INFO
 	std::cout << "  Begin iteration " << spp << ". " << scene.config.spp - spp << " remaining." << std::endl;
+	float lastIntersectionTime = intersectionTime;
+	float lastShadingTime = shadingTime;
+	float lastCompactionTime = compactionTime;
+	float lastGbufferTime = gbufferTime;
+	std::chrono::steady_clock::time_point timer;
 	timer = std::chrono::high_resolution_clock::now();
+#endif // DEB_INFO
+
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>> (window, spp, devRayPool1, scene.config.maxBounce, scene.cam, spp != 1);
 	checkCUDAError("kernInitializeRays failed.");
@@ -183,21 +191,19 @@ void PathTracer::iterate() {
 	terminatedRayNum = 0;
 	spp++;
 
-	if (printDetails) {
-		float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
-		std::cout << "    Intersection test: " << intersectionTime / 1000.f << " seconds." << std::endl;
-		std::cout << "    Shading: " << shadingTime / 1000.f << " seconds." << std::endl; 
-		std::cout << "    Compaction : " << compactionTime / 1000.f << " seconds." << std::endl;
-		std::cout << "    Gbuffer generation : " << gbufferTime / 1000.f << " seconds." << std::endl;
-
-		std::cout << "  Iteration " << spp - 1 << " finished. Time cost: " << runningTime <<
-			" seconds. Time Remaining: " << runningTime * (scene.config.spp - spp + 1) << " seconds." << std::endl; 
-
-		intersectionTime = 0.f;
-		compactionTime = 0.f;
-		shadingTime = 0.f;
-		gbufferTime = 0.f;
-	}
+#ifdef DEB_INFO
+	float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
+	std::cout << "    Intersection test: " << intersectionTime - lastIntersectionTime << " ms." << std::endl;
+	std::cout << "    Shading: " << shadingTime - lastShadingTime << " ms." << std::endl;
+	std::cout << "    Compaction : " << compactionTime - lastCompactionTime << " ms." << std::endl;
+	std::cout << "    Gbuffer generation : " << gbufferTime - lastGbufferTime << " ms." << std::endl;
+	std::cout << "  Iteration " << spp - 1 << " finished. Time cost: " << runningTime <<
+		" seconds. Time Remaining: " << runningTime * (scene.config.spp - spp + 1) << " seconds." << std::endl;
+	intersectionTime = 0.f;
+	compactionTime = 0.f;
+	shadingTime = 0.f;
+	gbufferTime = 0.f;
+#endif // DEB_INFO
 }
 
 __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out) {

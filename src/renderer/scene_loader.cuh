@@ -32,7 +32,6 @@ public:
 	std::unordered_map<int, std::pair<glm::vec3, glm::vec3>> tangents; // store faces' Ts and Bs
 	std::unordered_map<Vertex, std::vector<int>> vert2face; // store unique vertices and their faces
 
-	bool printDetails{ false };
 	Scene& scene;
 	std::string filePath;
 	nlohmann::json jFile;

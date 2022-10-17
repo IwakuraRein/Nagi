@@ -112,7 +112,6 @@ public:
 	std::unique_ptr<float[]> getAlbedoBuffer();
 	std::unique_ptr<float[]> getDepthBuffer();
 
-	bool printDetails{ false };
 	Scene& scene;
 	BVH& bvh;
 	WindowSize& window;
