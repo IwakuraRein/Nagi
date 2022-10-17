@@ -68,10 +68,6 @@ __global__ void kernGenerateSkyboxAlbedo(
 __global__ void kernGenerateGbuffer(
 	int rayNum, float currentSpp, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf,
 	float* currentAlbedoBuf, float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
-//__global__ void kernGenerateNormalDepth(
-//	int rayNum, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* normalBuf, float* depthBuf);
-//__global__ void kernGenerateAlbedo(
-//	int rayNum, float currentSpp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, float* currentAlbedoBuf, float* albedoBuf);
 __global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool);
 
 class PathTracer {

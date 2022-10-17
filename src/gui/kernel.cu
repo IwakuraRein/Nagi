@@ -12,9 +12,12 @@ __global__ void kernCopyToFrameBuffer(uchar4* pbo, int width, int height, int pi
     int idx2 = (height - py - 1) * width + px;
     //int idx2 = idx;
 
-    pbo[idx2].x = glm::clamp((unsigned char)(powf(buffer[idx * 3], 1.f / gamma) * 255.f), (unsigned char)0, (unsigned char)255);
-    pbo[idx2].y = glm::clamp((unsigned char)(powf(buffer[idx * 3 + 1], 1.f / gamma) * 255.f), (unsigned char)0, (unsigned char)255);
-    pbo[idx2].z = glm::clamp((unsigned char)(powf(buffer[idx * 3 + 2], 1.f / gamma) * 255.f), (unsigned char)0, (unsigned char)255);
+    glm::vec3 color{ buffer[idx * 3], buffer[idx * 3 + 1], buffer[idx * 3 + 2] };
+    color /= (1.f + color);
+
+    pbo[idx2].x = glm::clamp((unsigned char)(powf(color.x, 1.f / gamma) * 255.f), (unsigned char)0, (unsigned char)255);
+    pbo[idx2].y = glm::clamp((unsigned char)(powf(color.y, 1.f / gamma) * 255.f), (unsigned char)0, (unsigned char)255);
+    pbo[idx2].z = glm::clamp((unsigned char)(powf(color.z, 1.f / gamma) * 255.f), (unsigned char)0, (unsigned char)255);
     pbo[idx2].w = 0;
 }
 
