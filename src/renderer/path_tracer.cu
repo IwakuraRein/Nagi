@@ -380,7 +380,10 @@ __global__ void kernGenerateGbuffer(
 	}
 	else normal = intersect.normal;
 
-	if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+	if (mtl.type == MTL_TYPE_LIGHT_SOURCE) {
+		albedo = glm::vec3{ 1.f };
+	}
+	else if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
 		float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersect.uv.x, intersect.uv.y);
 		albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
 	}
@@ -538,7 +541,6 @@ __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectIn
 	}
 	else {
 		auto rng = makeSeededRandomEngine(spp, idx, 0);
-		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 		glm::vec3 normal, albedo;
 		glm::vec3 wo, bsdf;
 		float pdf;
@@ -555,7 +557,7 @@ __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectIn
 			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
 		}
 		else albedo = mtl.albedo;
-		wo = cosHemisphereSampler(normal, pdf, u01(rng), u01(rng));
+		wo = cosHemisphereSampler(normal, pdf, rng);
 		if (pdf < PDF_EPSILON) {
 			//p.lastHit = -1;
 			p.color = glm::vec3{ 0.f };
@@ -588,7 +590,6 @@ __global__ void kernShadeSpecular(int rayNum, int spp, Path* rayPool, IntersectI
 	}
 	else {
 		auto rng = makeSeededRandomEngine(spp, idx, 0);
-		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 		glm::vec3 normal, albedo;
 		float metallic;
 		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
@@ -610,16 +611,14 @@ __global__ void kernShadeSpecular(int rayNum, int spp, Path* rayPool, IntersectI
 		else metallic = mtl.metallic;
 
 		float pdf;
-		bool specular;
-		glm::vec3 wo = reflectSampler(metallic, albedo, p.ray.dir, normal, u01(rng), u01(rng), u01(rng), pdf, specular);
+		glm::vec3 wo = reflectSampler(metallic, albedo, p.ray.dir, normal, pdf, rng);
 		if (pdf < PDF_EPSILON) {
 			p.color = glm::vec3{ 0.f };
 			p.remainingBounces = 0;
 		}
 		else {
-			if (!specular)
-				albedo = lambertBrdf(p.ray.dir, wo, normal, albedo); // lambert is timed inside the bsdf
-			p.color = p.color * albedo / pdf;
+			glm::vec3 brdf = specularBrdf(p.ray.dir, wo, normal, albedo, metallic); // lambert is timed inside the bsdf
+			p.color = p.color * brdf / pdf;
 			p.ray.dir = wo;
 			p.ray.invDir = 1.f / p.ray.dir;
 
@@ -681,7 +680,7 @@ __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo
 		}
 		else albedo = mtl.albedo;
 
-		wo = refractSampler(mtl.ior, p.ray.dir, normal, u01(rng));
+		wo = refractSampler(mtl.ior, p.ray.dir, normal, rng);
 		p.color = p.color * albedo;
 		p.ray.origin += wo * REFRACT_OFFSET;
 		p.ray.dir = wo;
@@ -711,9 +710,6 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, Intersec
 	}
 	else {
 		auto rng = makeSeededRandomEngine(spp, idx, 0);
-		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
-		float samplingRnd1 = u01(rng);
-		float samplingRnd2 = u01(rng);
 		glm::vec3 normal, albedo;
 		glm::vec3 wo, bsdf;
 		float pdf;
@@ -740,15 +736,9 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, Intersec
 		}
 		else roughness = mtl.roughness;
 
-		float r = u01(rng);
-		float s = 0.5f + metallic / 2.f;
-		float pdf2;
-		wo = ggxImportanceSampler(roughness, p.ray.dir, normal, pdf, samplingRnd1, samplingRnd2);
-		glm::vec3 wo2 = cosHemisphereSampler(normal, pdf2, samplingRnd1, samplingRnd2);
-		if (r > s) wo = wo2;
-		pdf = s * pdf + (1.f - s) * pdf2;
+		wo = ggxImportanceSampler(roughness, metallic, p.ray.dir, normal, pdf, rng);
 
-		if (glm::dot(wo, normal) <= FLT_EPSILON || pdf < PDF_EPSILON) {
+		if (glm::dot(wo, normal) < 0.f || pdf < PDF_EPSILON) {
 			p.color = glm::vec3{ 0.f };
 			p.remainingBounces = 0;
 		}

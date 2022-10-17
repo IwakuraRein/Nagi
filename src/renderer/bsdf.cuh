@@ -5,10 +5,9 @@
 
 namespace nagi {
 
-inline __device__ glm::vec3 microfacetBrdf(
+inline __device__ __host__ glm::vec3 microfacetBrdf(
 	const glm::vec3& wi, const glm::vec3& wo, const glm::vec3& normal, const glm::vec3& albedo, float metallic, float alpha) {
 	float G, D;
-	glm::vec3 F;
 	glm::vec3 h = halfway(-wi, wo);
 	float nh = fmaxf(glm::dot(normal, h), 0.f);
 	float a2 = alpha * alpha;
@@ -23,12 +22,21 @@ inline __device__ glm::vec3 microfacetBrdf(
 	G = G1 * G2;
 
 	float hv = fmaxf(glm::dot(h, -wi), 0.f);
-	glm::vec3 f0;
-	f0 = glm::mix(glm::vec3{ 0.04 }, albedo, metallic); // x * (1 - level) + y * level
-	//f0 = albedo * metallic;
-	F = f0 + (1.f - f0) * powf(1.f - hv, 5.f);
+	//glm::vec3 F = glm::mix(ior, albedo, metallic); // x * (1 - level) + y * level
+	glm::vec3 F = albedo * metallic;
+	F = F + (1.f - F) * powf(1.f - hv, 5.f);
 	return (1.f - metallic) * (1.f - F) * albedo * INV_PI * fmaxf(glm::dot(wo, normal), 0.f) +
 		D * F * G * 0.25f / (fmaxf(glm::dot(-wi, normal), FLT_EPSILON));
+}
+
+inline __device__ __host__ glm::vec3 specularBrdf(
+	const glm::vec3& wi, const glm::vec3& wo, const glm::vec3& normal, const glm::vec3& albedo, float metallic) {
+	float hv = fmaxf(glm::dot(normal, -wi), 0.f);
+	//glm::vec3 F = glm::mix(ior, albedo, metallic);
+	glm::vec3 F = albedo * metallic;
+	F = F + (1.f - F) * powf(1.f - hv, 5.f);
+
+	return (1.f - metallic) * (1.f - F) * albedo * INV_PI * fmaxf(glm::dot(wo, normal), 0.f) + F * albedo;
 }
 
 inline __device__ glm::vec3 lambertBrdf(
