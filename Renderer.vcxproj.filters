@@ -55,9 +55,6 @@
     <CudaCompile Include="src\renderer\denoiser.cu">
       <Filter>Source</Filter>
     </CudaCompile>
-    <CudaCompile Include="src\renderer\io.cu">
-      <Filter>Source</Filter>
-    </CudaCompile>
     <CudaCompile Include="src\renderer\path_tracer.cu">
       <Filter>Source</Filter>
     </CudaCompile>

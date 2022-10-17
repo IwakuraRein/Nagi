@@ -6,8 +6,6 @@
 #include "io.cuh"
 #include "gui.hpp"
 
-#include <OpenImageDenoise/oidn.hpp>
-
 #include <iomanip>
 #include <stdint.h>
 
@@ -30,18 +28,22 @@ int main(int argc, char* argv[]) {
 		std::unique_ptr<BVH> bvh = std::make_unique<BVH>(scene);
 		bvh->build();
 		std::unique_ptr<PathTracer> pathTracer = std::make_unique<PathTracer>(scene, *bvh);
+		std::unique_ptr<GUI> gui = std::make_unique<GUI>(
+			"Nagi Preview Window", scene.window.width, scene.window.height, scene.config.gamma, pathTracer->devFrameBuf, pathTracer->devCurrentNormalBuf, pathTracer->devAlbedoBuf, pathTracer->devCurrentDepthBuf);
 
-		pathTracer->initialize();
 		std::cout << "Start ray tracing..." << std::endl;
-		while(!pathTracer->finish())
+		while (!pathTracer->finish()) {
 			pathTracer->iterate();
+			if (!gui->terminated())
+				gui->render();
+		}
 		std::cout << "Ray tracing finished." << std::endl;
 
 		auto frameBuf = pathTracer->getFrameBuffer();
 		saveHDR(scene.window, frameBuf.get(), 3, saveDir + "/nagi_result_");
 		savePNG(scene.window, frameBuf.get(), 3, scene.config.gamma, saveDir + "/nagi_result_");
 
-		if (scene.config.denoiser != DENOISER_TYPE_NONE) {
+		if (scene.config.denoiser) {
 			std::unique_ptr<Denoiser> denoiser = std::make_unique<Denoiser>(scene, *pathTracer);
 			auto denoisedFrameBuf = denoiser->denoise();
 			saveHDR(scene.window, denoisedFrameBuf.get(), 3, saveDir + "/nagi_result_denoised_");
@@ -61,16 +63,10 @@ int main(int argc, char* argv[]) {
 		saveHDR(scene.window, depth.get(), 1, saveDir + "/depth_");
 #endif // DEB_INFO
 
+		gui.reset(nullptr);
 		pathTracer.reset(nullptr);
 		bvh.reset(nullptr);
 		sceneLoader.reset(nullptr);
-
-
-		//std::unique_ptr<GUI> gui = std::make_unique<GUI>(scene.window.width, scene.window.height, "Nagi");
-		//while (!glfwWindowShouldClose(gui->window)) {
-		//	gui->render();
-		//}
-		//gui.reset(nullptr);
 	}
 	catch (std::exception e) {
 		std::cerr << e.what() << std::endl;

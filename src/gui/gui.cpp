@@ -1,315 +1,256 @@
 #include "gui.hpp"
 
-using namespace ImGui;
+int imGuiDemo() {
+    // Setup window
+    glfwSetErrorCallback(glfw_error_callback);
+    if (!glfwInit())
+        return 1;
+
+    // Decide GL+GLSL versions
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+    // GL ES 2.0 + GLSL 100
+    const char* glsl_version = "#version 100";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+#elif defined(__APPLE__)
+    // GL 3.2 + GLSL 150
+    const char* glsl_version = "#version 150";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
+#else
+    // GL 3.0 + GLSL 130
+    const char* glsl_version = "#version 130";
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+    //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
+#endif
+
+    // Create window with graphics context
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL3 example", NULL, NULL);
+    if (window == NULL)
+        return 1;
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1); // Enable vsync
+
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+    //ImGui::StyleColorsLight();
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init(glsl_version);
+
+    // Load Fonts
+    // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
+    // - AddFontFromFileTTF() will return the ImFont* so you can store it if you need to select the font among multiple.
+    // - If the file cannot be loaded, the function will return NULL. Please handle those errors in your application (e.g. use an assertion, or display an error and quit).
+    // - The fonts will be rasterized at a given size (w/ oversampling) and stored into a texture when calling ImFontAtlas::Build()/GetTexDataAsXXXX(), which ImGui_ImplXXXX_NewFrame below will call.
+    // - Use '#define IMGUI_ENABLE_FREETYPE' in your imconfig file to use Freetype for higher quality font rendering.
+    // - Read 'docs/FONTS.md' for more instructions and details.
+    // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to write a double backslash \\ !
+    //io.Fonts->AddFontDefault();
+    //io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", 18.0f);
+    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f);
+    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f);
+    //io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
+    //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesJapanese());
+    //IM_ASSERT(font != NULL);
+
+    // Our state
+    bool show_demo_window = true;
+    bool show_another_window = false;
+    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+    // Main loop
+    while (!glfwWindowShouldClose(window))
+    {
+        // Poll and handle events (inputs, window resize, etc.)
+        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
+        // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
+        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
+        // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
+        glfwPollEvents();
+
+        // Start the Dear ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+        if (show_demo_window)
+            ImGui::ShowDemoWindow(&show_demo_window);
+
+        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+        {
+            static float f = 0.0f;
+            static int counter = 0;
+
+            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+
+            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+            ImGui::Checkbox("Another Window", &show_another_window);
+
+            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+
+            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+                counter++;
+            ImGui::SameLine();
+            ImGui::Text("counter = %d", counter);
+
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+            ImGui::End();
+        }
+
+        // 3. Show another simple window.
+        if (show_another_window)
+        {
+            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+            ImGui::Text("Hello from another window!");
+            if (ImGui::Button("Close Me"))
+                show_another_window = false;
+            ImGui::End();
+        }
+
+        // Rendering
+        ImGui::Render();
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        glfwSwapBuffers(window);
+    }
+
+    // Cleanup
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+
+    return 0;
+}
 
 namespace nagi {
 
-GUI::GUI(int Width, int Height, const std::string& windowName)
-	: width{ Width }, height{ Height }, pixels{ Width * Height }, windowExtend{ (uint32_t)Width, (uint32_t)Height }{
-	glfwInit();
+GUI::GUI(const std::string& windowName, int w, int h, float gamma, float* devResultBuffer, float* devNormalBuffer, float* devAlbedoBuffer, float* devDepthBuffer) :
+    width{ w }, height{ h }, pixels{ w * h }, gamma{ gamma }, devResultBuffer{ devResultBuffer }, devNormalBuffer{ devNormalBuffer }, devAlbedoBuffer{ devAlbedoBuffer }, devDepthBuffer{ devDepthBuffer } {
+    glfwSetErrorCallback(glfw_error_callback);
+    if (!glfwInit())
+        throw std::runtime_error("Error: Failed to initialize GLFW.");
 
-	// glfwWindowHint(int hint, int value): set value to hint
-	// GLFW uses OpenGL as defualt. Disable this with GLFW_NO_API
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	// Disable resizing window
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	// The fourth parameter allows you to optionally specify a monitor to open the window on and the last parameter is only relevant to OpenGL.
-	window = (glfwCreateWindow(width, height, windowName.c_str(), nullptr, nullptr));
-	glfwSetWindowUserPointer(window, this);
+    // GL 3.0 + GLSL 130
+    const char* glsl_version = "#version 130";
 
-	std::cout << "Initializing GUI... " << std::endl;
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    // Disable resizing window
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    window = glfwCreateWindow(width, height, windowName.c_str(), nullptr, nullptr);
+    if (window == nullptr) {
+        throw std::runtime_error("Error: Failed to create GLFW window.");
+    }
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1); // Enable vsync
 
-	device = std::make_shared<Device>(window);
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+    ImGui::StyleColorsDark();
 
-	{std::vector<VkDescriptorPoolSize> pool_sizes
-		{
-			{ VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-			{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-	};
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init(glsl_version);
 
-	descriptorPool = std::make_shared<DescriptorPool>(
-		*device,
-		1000,
-		VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-		pool_sizes
-		);
-	}
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        throw std::runtime_error("Error: Failed to initialize GLAD");
+    }
 
-	{
-		_currentImageIdx = 0;
-		// wait until the current swapchain is not used
-		vkDeviceWaitIdle(device->device());
-		swapChain = std::make_shared<SwapChain>(*device, windowExtend, VK_PRESENT_MODE_FIFO_KHR);
-	}
+    glGenBuffers(1, &pbo); // make & register PBO
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, 4 * sizeof(GLubyte) * width * height, NULL, GL_DYNAMIC_DRAW);
 
-	{
-		_commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-
-		VkCommandBufferAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		allocInfo.commandPool = device->getCommandPool();
-		allocInfo.commandBufferCount = static_cast<uint32_t>(_commandBuffers.size());
-
-		if (vkAllocateCommandBuffers(device->device(), &allocInfo, _commandBuffers.data()) != VK_SUCCESS) {
-			throw std::runtime_error("Error: Failed to allocate command buffers.");
-		}
-	}
-
-	{
-		swapChain->createSwapChainColorAttachment(colorAttachment.images, colorAttachment.views);
-		colorAttachment.format = swapChain->getSwapChainImageFormat();
-		colorAttachment.clearValue.color = VkClearColorValue{ 0.f, 0.f, 0.f, 1.f };
-		colorAttachment.extent = windowExtend;
-		colorAttachment.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		RenderPassAttachment ColorAttachment{ colorAttachment };
-		ColorAttachment.description.format = colorAttachment.format;
-		ColorAttachment.description.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-		renderPass = RenderPass::Builder(
-			*device,
-			*swapChain,
-			{ ColorAttachment })
-			.addSubPass({ 0 }, { }, -1)
-			.build();
-	}
-
-	{
-		CreateContext();
-		ImGui_ImplGlfw_InitForVulkan(window, true);
-		ImGui_ImplVulkan_InitInfo initInfo = {};
-		initInfo.Instance = device->instance();
-		initInfo.PhysicalDevice = device->physicalDevice();
-		initInfo.Device = device->device();
-		initInfo.Queue = device->graphicsQueue();
-		initInfo.DescriptorPool = descriptorPool->getPool();
-		initInfo.MinImageCount = device->getSwapChainSupport().capabilities.minImageCount;
-		initInfo.ImageCount = swapChain->imageCount();
-		initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-		initInfo.Subpass = 0;
-		ImGui_ImplVulkan_Init(&initInfo, renderPass->renderPass());
-
-		auto cmd = device->beginSingleTimeCommands();
-		ImGui_ImplVulkan_CreateFontsTexture(cmd);
-		device->endSingleTimeCommands(cmd);
-
-		ImGui_ImplVulkan_DestroyFontUploadObjects();
-
-		StyleColorsDark();
-	}
-
-	{
-		frameImage.format = VK_FORMAT_R32G32B32_SFLOAT;
-
-		VkSamplerCreateInfo samplerInfo{};
-		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerInfo.magFilter = VK_FILTER_LINEAR;
-		samplerInfo.minFilter = VK_FILTER_LINEAR;
-		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		samplerInfo.anisotropyEnable = VK_TRUE;
-		samplerInfo.maxAnisotropy = 1.f;
-		samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		samplerInfo.unnormalizedCoordinates = VK_FALSE;
-		samplerInfo.compareEnable = VK_FALSE;
-		samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-
-		//anisotropic_filtering
-		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		samplerInfo.mipLodBias = 0.0f;
-		samplerInfo.minLod = 0.0f;
-		samplerInfo.maxLod = 1.0f;
-
-		if (vkCreateSampler(device->device(), &samplerInfo, nullptr, &frameImage.sampler) != VK_SUCCESS) {
-			throw std::runtime_error("Error: Failed to create sampler!");
-		}
-
-		VkImageCreateInfo imageInfo{};
-		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		imageInfo.imageType = VK_IMAGE_TYPE_2D;
-		imageInfo.extent.width = width;
-		imageInfo.extent.height = height;
-		imageInfo.extent.depth = 1.f;
-		imageInfo.mipLevels = 1;
-		imageInfo.arrayLayers = 1;
-		imageInfo.format = frameImage.format;
-		imageInfo.tiling = VK_IMAGE_TILING_LINEAR;
-		imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-		imageInfo.flags = 0;
-
-		VmaAllocationCreateInfo allocCreateInfo{};
-		allocCreateInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-		allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-
-		if (vmaCreateImage(device->allocator(), &imageInfo, &allocCreateInfo, &frameImage.image, &frameImage.memory, nullptr)) {
-			throw std::runtime_error("Error: failed to allocate image memory!");
-		}
-
-		VkImageViewCreateInfo viewInfo{};
-		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = frameImage.image;
-		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		viewInfo.format = frameImage.format;
-		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		viewInfo.subresourceRange.baseMipLevel = 0;
-		viewInfo.subresourceRange.levelCount = 1;
-		viewInfo.subresourceRange.baseArrayLayer = 0;
-		viewInfo.subresourceRange.layerCount = 1;
-
-		if (vkCreateImageView(device->device(), &viewInfo, nullptr, &frameImage.imageView) != VK_SUCCESS) {
-			throw std::runtime_error("Error: failed to create image view!");
-		}
-
-		device->transitImageLayout(
-			frameImage.image, frameImage.format, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-		frameImage.ImGuiImageId = 
-			ImGui_ImplVulkan_AddTexture(frameImage.sampler, frameImage.imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	}
-
-	std::cout << "GUI initilization finished." << std::endl;
+    if (cudaGraphicsGLRegisterBuffer(&regesitered_pbo, pbo, cudaGraphicsRegisterFlagsWriteDiscard) != CUDA_SUCCESS) {
+        throw std::runtime_error("Error: Failed to register pbo.");
+    }
 }
+void GUI::terminate() {
+    if (window) {
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        //if (cudaGLUnregisterBufferObject(pbo) != CUDA_SUCCESS) {
+        //    throw std::runtime_error("Error: Failed to unrgister device pointer.");
+        //}
+        if (cudaGraphicsUnregisterResource(regesitered_pbo) != CUDA_SUCCESS) {
+            throw std::runtime_error("Error: Failed to unrgister pbo.");
+        }
+        glDeleteBuffers(1, &pbo);
 
-GUI::~GUI()
-{
-	vkDeviceWaitIdle(device->device());
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
 
- 	ImGui_ImplVulkan_Shutdown();
-	vkFreeCommandBuffers(
-		device->device(),
-		device->getCommandPool(),
-		static_cast<uint32_t>(_commandBuffers.size()),
-		_commandBuffers.data());
-	_commandBuffers.clear();
-	for (int i = 0; i < colorAttachment.images.size(); i++) {
-		vkDestroyImageView(device->device(), colorAttachment.views[i], nullptr);
-	}
-	colorAttachment.views.clear();
-	vkDestroySampler(device->device(), frameImage.sampler, nullptr);
-	vkDestroyImageView(device->device(), frameImage.imageView, nullptr);
-	vmaDestroyImage(device->allocator(), frameImage.image, frameImage.memory);
-}
+        glfwDestroyWindow(window);
+        glfwTerminate();
 
-void GUI::init() {
+        window = nullptr;
+    }
 }
 
 void GUI::render() {
+	if (window) {
+		if (glfwWindowShouldClose(window)) {
+			terminate();
+			return;
+		}
 
-	ImGui_ImplVulkan_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	NewFrame();
-	Image((ImTextureID)frameImage.ImGuiImageId, { (float)width, (float)height });
-	ShowDemoWindow();
-	EndFrame();
-	Render();
+        copyToFrameBuffer();
 
-	glfwPollEvents();
-	auto commandBuffer = beginFrame();
-	beginRenderPass(commandBuffer);
-	ImGui_ImplVulkan_RenderDrawData(GetDrawData(), commandBuffer);
-	//endRenderPass();
-	vkCmdEndRenderPass(commandBuffer);
+        glfwPollEvents();
 
-	endFrame();
-}
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(clearColor.x * clearColor.w, clearColor.y * clearColor.w, clearColor.z * clearColor.w, clearColor.w);
+        glClear(GL_COLOR_BUFFER_BIT);
 
-VkCommandBuffer GUI::beginFrame() {
-	assert(!_isFrameStarted and "Error: Frame has already started.");
-	auto result = swapChain->acquireNextImage(&_currentImageIdx);
+        // display rendering result via OpenGL
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo); // THE MAGIC LINE #1 
+        glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);   // THE MAGIC LINE #2
 
-	// VK_ERROR_OUT_OF_DATE_KHR:
-	// A surface has changed so that it is no longer compatible with the swapchain
-	// and further presentation requests using the swapchain will fail. Engine must
-	// query the new surface properties and recreate their swapchain.
-	if (result == VK_ERROR_OUT_OF_DATE_KHR) { //recreate swap chain
-		_currentImageIdx = 0;
-		// wait until the current swapchain is not used
-		vkDeviceWaitIdle(device->device());
-		swapChain = std::make_shared<SwapChain>(*device, VkExtent2D{ (uint32_t)width, (uint32_t)height }, VK_PRESENT_MODE_FIFO_KHR);
-	}
-
-	if (result != VK_SUCCESS and result != VK_SUBOPTIMAL_KHR) {
-		throw std::runtime_error("Error: Failed to acquire swap chain image!");
-	}
-
-	_isFrameStarted = true;
-	auto commandBuffer = _commandBuffers[_currentFrameIdx];
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-		throw std::runtime_error("Error: Failed to begin recording command buffer!");
-	}
-	return commandBuffer;
-
-}
-
-void GUI::endFrame() {
-	assert(_isFrameStarted and "Error: Frame isn't in progress.");
-	auto commandBuffer = _commandBuffers[_currentFrameIdx];
-	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-		throw std::runtime_error("failed to record command buffer!");
-	}
-
-	auto result = swapChain->submitCommandBuffers(&commandBuffer, &_currentImageIdx);
-	if (result == VK_ERROR_OUT_OF_DATE_KHR ||
-		result == VK_SUBOPTIMAL_KHR) {
-		_currentImageIdx = 0;
-		// wait until the current swapchain is not used
-		vkDeviceWaitIdle(device->device());
-		swapChain = std::make_shared<SwapChain>(*device, VkExtent2D{ (uint32_t)width, (uint32_t)height }, VK_PRESENT_MODE_FIFO_KHR);
-	}
+		// Start the Dear ImGui frame
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
 
 
-	_isFrameStarted = false;
-	_currentFrameIdx = (_currentFrameIdx + 1) % MAX_FRAMES_IN_FLIGHT;
-}
 
-void GUI::beginRenderPass(VkCommandBuffer commandBuffer)
-{
-	if (!_isFrameStarted) throw std::runtime_error("Error: Can't call begin render pass if frame is not in progress");
-	if (!(commandBuffer == _commandBuffers[_currentFrameIdx])) throw std::runtime_error("Error: Can't begin render pass on command buffer from a different frame");
+		ImGui::EndFrame();
+		ImGui::Render();
 
-	glm::vec2 startCoord{ 0.f, 0.f };
-	VkRenderPassBeginInfo renderPassInfo{};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = renderPass->renderPass();
-	renderPassInfo.framebuffer = renderPass->frameBuffers[_currentImageIdx];
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glfwSwapBuffers(window);
 
-	//renderPassInfo.renderArea.offset = { static_cast<int>(startCoord.x), static_cast<int>(startCoord.y) };
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	//renderPassInfo.renderArea.extent = _window.viewPortExtent();
-	renderPassInfo.renderArea.extent = swapChain->getSwapChainExtent();
-
-	renderPassInfo.clearValueCount = static_cast<uint32_t>(renderPass->clearValues.size());
-	renderPassInfo.pClearValues = renderPass->clearValues.data();
-
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	VkViewport viewport{};
-	viewport.x = 0.f;
-	viewport.y = 0.f;
-	viewport.width = (float)width;
-	viewport.height = (float)height;
-
-	viewport.minDepth = 0.f;
-	viewport.maxDepth = 1.f;
-	VkRect2D scissor{ {0,0}, windowExtend };
-	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+        counter++;
+    }
 }
 
 }

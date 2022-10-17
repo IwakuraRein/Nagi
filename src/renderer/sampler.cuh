@@ -34,6 +34,11 @@ thrust::default_random_engine makeSeededRandomEngine(const int& iter, const int&
 	return thrust::default_random_engine(h);
 }
 
+inline __device__ __host__
+thrust::default_random_engine makeSeededRandomEngine(const int& seed) {
+	return thrust::default_random_engine(hash(seed));
+}
+
 inline __device__ __host__ float fresnel(const float& cosI, const float& cosT, const float& iorI, const float& iorT) {
 	float ti = iorT * cosI;
 	float it = iorI * cosT;

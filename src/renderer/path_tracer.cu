@@ -6,8 +6,7 @@
 #include <thrust/copy.h>
 
 namespace nagi {
-
-void PathTracer::initialize() {
+PathTracer::PathTracer(Scene& Scene, BVH& BVH) :scene{ Scene }, window{ scene.window }, bvh{ BVH }{
 	destroyBuffers();
 	allocateBuffers();
 
@@ -42,6 +41,8 @@ void PathTracer::allocateBuffers() {
 	checkCUDAError("cudaMalloc devAlbedoBuf failed.");
 	cudaMalloc((void**)&devDepthBuf, sizeof(float) * window.pixels);
 	checkCUDAError("cudaMalloc devDepthBuf failed.");
+	cudaMalloc((void**)&devCurrentNormalBuf, sizeof(float) * window.pixels * 3);
+	checkCUDAError("cudaMalloc devCurrentNormalBuf failed.");
 	cudaMalloc((void**)&devCurrentAlbedoBuf, sizeof(float) * window.pixels * 3);
 	checkCUDAError("cudaMalloc devCurrentAlbedoBuf failed.");
 	cudaMalloc((void**)&devCurrentDepthBuf, sizeof(float) * window.pixels);
@@ -120,6 +121,11 @@ void PathTracer::destroyBuffers() {
 		cudaFree(devDepthBuf);
 		checkCUDAError("cudaFree devDepthBuf failed.");
 		devDepthBuf = nullptr;
+	}
+	if (devCurrentNormalBuf) {
+		cudaFree(devCurrentNormalBuf);
+		checkCUDAError("cudaFree devCurrentNormalBuf failed.");
+		devCurrentNormalBuf = nullptr;
 	}
 	if (devCurrentAlbedoBuf) {
 		cudaFree(devCurrentAlbedoBuf);

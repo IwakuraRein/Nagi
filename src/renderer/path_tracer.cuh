@@ -76,12 +76,11 @@ __global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm:
 
 class PathTracer {
 public:
-	PathTracer(Scene& Scene, BVH& BVH) :scene{ Scene }, window{ scene.window }, bvh{ BVH } {}
+	PathTracer(Scene& Scene, BVH& BVH);
 	~PathTracer();
 	PathTracer(const PathTracer&) = delete;
 	void operator=(const PathTracer&) = delete;
 
-	void initialize();
 	void allocateBuffers();
 	void destroyBuffers();
 	void iterate();
@@ -134,6 +133,7 @@ public:
 	float* devNormalBuf{ nullptr };
 	float* devAlbedoBuf{ nullptr };
 	float* devDepthBuf{ nullptr };
+	float* devCurrentNormalBuf{ nullptr };
 	float* devCurrentAlbedoBuf{ nullptr };
 	float* devCurrentDepthBuf{ nullptr };
 	float* devVarianceBuf{ nullptr };

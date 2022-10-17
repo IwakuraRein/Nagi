@@ -2,22 +2,31 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Header">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+      <UniqueIdentifier>{86876d1c-3f74-451d-a3ea-e69e4388f8c0}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+      <UniqueIdentifier>{8ec85b5a-98c9-47f7-82ca-25140066d335}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\gui\gui.cpp">
+    <ClInclude Include="src\gui\gui.cpp">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gui\gui.hpp">
+      <Filter>Header</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\gui\gui.hpp">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="src\gui\vk_descriptor.cpp">
+    <ClCompile Include="src\3rdparty\imgui\imgui_impl_opengl3.cpp">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="src\gui\vk_device.cpp">
+    <ClCompile Include="src\3rdparty\imgui\imgui_tables.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\3rdparty\imgui\imgui_widgets.cpp">
       <Filter>Source</Filter>
     </ClCompile>
     <ClCompile Include="src\3rdparty\imgui\imgui.cpp">
@@ -32,37 +41,16 @@
     <ClCompile Include="src\3rdparty\imgui\imgui_impl_glfw.cpp">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="src\3rdparty\imgui\imgui_impl_vulkan.cpp">
+    <ClCompile Include="src\3rdparty\glad\glad.c">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="src\3rdparty\imgui\imgui_tables.cpp">
-      <Filter>Source</Filter>
-    </ClCompile>
-    <ClCompile Include="src\3rdparty\imgui\imgui_widgets.cpp">
-      <Filter>Source</Filter>
-    </ClCompile>
-    <ClCompile Include="src\gui\vk_render_pass.cpp">
-      <Filter>Source</Filter>
-    </ClCompile>
-    <ClCompile Include="src\gui\vk_swap_chain.cpp">
+    <ClCompile Include="src\gui\gui.cpp">
       <Filter>Source</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\gui\vk_device.hpp">
-      <Filter>Header</Filter>
-    </ClInclude>
-    <ClInclude Include="src\gui\vk_render_pass.hpp">
-      <Filter>Header</Filter>
-    </ClInclude>
-    <ClInclude Include="src\gui\vk_swap_chain.hpp">
-      <Filter>Header</Filter>
-    </ClInclude>
-    <ClInclude Include="src\gui\gui.hpp">
-      <Filter>Header</Filter>
-    </ClInclude>
-    <ClInclude Include="src\gui\vk_descriptor.hpp">
-      <Filter>Header</Filter>
-    </ClInclude>
+    <CudaCompile Include="src\gui\kernel.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

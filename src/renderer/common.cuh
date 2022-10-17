@@ -48,10 +48,6 @@
 #define PIXEL_TYPE_GLOSSY   1
 #define PIXEL_TYPE_SPECULAR 2
 
-#define DENOISER_TYPE_NONE 0
-#define DENOISER_TYPE_FILTER 1
-#define DENOISER_TYPE_OIDN 2
-
 #define TEXTURE_TYPE_BASE 0
 #define TEXTURE_TYPE_ROUGHNESS 1
 #define TEXTURE_TYPE_METALLIC 2
@@ -312,7 +308,7 @@ struct WindowSize {
 struct Configuration {
 	int spp{ 64 };
 	int maxBounce{ 8 };
-	int denoiser{ 0 };
+	bool denoiser{ false };
 	float gamma{ 2.2f };
 };
 
