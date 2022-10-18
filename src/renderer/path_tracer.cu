@@ -151,16 +151,15 @@ PathTracer::~PathTracer() {
 }
 
 // intersection test -> compact rays -> sort rays according to material -> compute color -> compact rays -> intersection test...
-void PathTracer::iterate() {
+float PathTracer::iterate() {
 
+	std::chrono::steady_clock::time_point timer = std::chrono::high_resolution_clock::now();
 #ifdef DEB_INFO
 	std::cout << "  Begin iteration " << spp << ". " << scene.config.spp - spp << " remaining." << std::endl;
 	float lastIntersectionTime = intersectionTime;
 	float lastShadingTime = shadingTime;
 	float lastCompactionTime = compactionTime;
 	float lastGbufferTime = gbufferTime;
-	std::chrono::steady_clock::time_point timer;
-	timer = std::chrono::high_resolution_clock::now();
 #endif // DEB_INFO
 
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
@@ -186,7 +185,7 @@ void PathTracer::iterate() {
 		}
 		gbufferTime += tok();
 
-		remainingRays = shade(remainingRays, spp);
+		remainingRays = shade(remainingRays, spp, bounce);
 		//std::cout << remainingRays << std::endl;
 		if (remainingRays <= 0) break;
 	}
@@ -197,19 +196,20 @@ void PathTracer::iterate() {
 	terminatedRayNum = 0;
 	spp++;
 
+	float delta = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
 #ifdef DEB_INFO
-	float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
 	std::cout << "    Intersection test: " << intersectionTime - lastIntersectionTime << " ms." << std::endl;
 	std::cout << "    Shading: " << shadingTime - lastShadingTime << " ms." << std::endl;
 	std::cout << "    Compaction : " << compactionTime - lastCompactionTime << " ms." << std::endl;
 	std::cout << "    Gbuffer generation : " << gbufferTime - lastGbufferTime << " ms." << std::endl;
-	std::cout << "  Iteration " << spp - 1 << " finished. Time cost: " << runningTime <<
-		" seconds. Time Remaining: " << runningTime * (scene.config.spp - spp + 1) << " seconds." << std::endl;
+	std::cout << "  Iteration " << spp - 1 << " finished. Time cost: " << delta << " seconds."<< std::endl;
 	intersectionTime = 0.f;
 	compactionTime = 0.f;
 	shadingTime = 0.f;
 	gbufferTime = 0.f;
 #endif // DEB_INFO
+
+	return delta;
 }
 
 __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out) {
@@ -370,7 +370,7 @@ void PathTracer::sortRays(int rayNum) {
 
 __global__ void kernGenerateGbuffer(
 	int rayNum, float currentSpp, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, 
-	float* currentAlbedoBuf, float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
+	float* currentAlbedoBuf, float* currentNormalBuf, float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
@@ -437,12 +437,15 @@ __global__ void kernGenerateGbuffer(
 			currentAlbedoBuf[pixel * 3 + 2] = albedo.z;
 			//currentDepthBuf[pixel] = depth;
 
-			if (currentSpp == 1.f) {
-				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
-				normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
-				normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
-				normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
-			}
+			currentDepthBuf[pixel] = depth;
+			depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
+
+			currentNormalBuf[pixel * 3] = normal.x;
+			currentNormalBuf[pixel * 3 + 1] = normal.y;
+			currentNormalBuf[pixel * 3 + 2] = normal.z;
+			normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
+			normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
+			normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
 		}
 		else {
 			p.type == PIXEL_TYPE_DIFFUSE;
@@ -451,13 +454,15 @@ __global__ void kernGenerateGbuffer(
 			albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + albedo.y) / currentSpp;
 			albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + albedo.z) / currentSpp;
 
-			if (currentSpp == 1.f) {
-				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
+			currentDepthBuf[pixel] = depth;
+			depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
 
-				normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
-				normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
-				normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
-			}
+			currentNormalBuf[pixel * 3] = normal.x;
+			currentNormalBuf[pixel * 3 + 1] = normal.y;
+			currentNormalBuf[pixel * 3 + 2] = normal.z;
+			normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
+			normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
+			normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
 		}
 
 		rayPool[idx] = p;
@@ -504,18 +509,22 @@ __global__ void kernGenerateGbuffer(
 				albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3] * albedo.x) / currentSpp;
 				albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 1] * albedo.y) / currentSpp;
 				albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 2] * albedo.z) / currentSpp;
-				if (currentSpp == 1.f) {
-					depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + currentDepthBuf[pixel] + depth) / currentSpp;
-					normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
-					normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
-					normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
-				}
+				
+				currentDepthBuf[pixel] += depth;
+				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + currentDepthBuf[pixel]) / currentSpp;
+
+				currentNormalBuf[pixel * 3] = normal.x;
+				currentNormalBuf[pixel * 3 + 1] = normal.y;
+				currentNormalBuf[pixel * 3 + 2] = normal.z;
+				normalBuf[pixel * 3] = (normalBuf[pixel * 3] * (currentSpp - 1.f) + normal.x) / currentSpp;
+				normalBuf[pixel * 3 + 1] = (normalBuf[pixel * 3 + 1] * (currentSpp - 1.f) + normal.y) / currentSpp;
+				normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
 			}
 			else {
 				currentAlbedoBuf[pixel * 3] *= albedo.x;
 				currentAlbedoBuf[pixel * 3 + 1] *= albedo.y;
 				currentAlbedoBuf[pixel * 3 + 2] *= albedo.z;
-				if (currentSpp == 1.f) currentDepthBuf[pixel] += depth;
+				currentDepthBuf[pixel] += depth;
 			}
 		}
 	}
@@ -528,12 +537,12 @@ void PathTracer::generateGbuffer(int rayNum, int spp, int bounce) {
 	//}
 	//kernGenerateAlbedo(rayNum, float(spp), bounce, devRayPool1, devResults1, devMtlBuf, devCurrentAlbedoBuf, devAlbedoBuf);
 	kernGenerateGbuffer<<<blocksPerGrid, BLOCK_SIZE>>>(
-		rayNum, (float)spp, bounce, scene.cam.position, devRayPool1, devResults1, devMtlBuf, devCurrentAlbedoBuf, devCurrentDepthBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
+		rayNum, (float)spp, bounce, scene.cam.position, devRayPool1, devResults1, devMtlBuf, devCurrentAlbedoBuf, devCurrentNormalBuf, devCurrentDepthBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
 }
 
 
 // compute color and generate new ray direction
-__global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+__global__ void kernShadeLambert(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
@@ -552,7 +561,7 @@ __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectIn
 		p.remainingBounces = 0;
 	}
 	else {
-		auto rng = makeSeededRandomEngine(spp, idx, 0);
+		auto rng = makeSeededRandomEngine(spp, idx, bounce);
 		glm::vec3 normal, albedo;
 		glm::vec3 wo, bsdf;
 		float pdf;
@@ -585,7 +594,7 @@ __global__ void kernShadeLambert(int rayNum, int spp, Path* rayPool, IntersectIn
 	}
 	rayPool[idx] = p;
 }
-__global__ void kernShadeSpecular(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+__global__ void kernShadeSpecular(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
@@ -601,7 +610,7 @@ __global__ void kernShadeSpecular(int rayNum, int spp, Path* rayPool, IntersectI
 		p.remainingBounces = 0;
 	}
 	else {
-		auto rng = makeSeededRandomEngine(spp, idx, 0);
+		auto rng = makeSeededRandomEngine(spp, idx, bounce);
 		glm::vec3 normal, albedo;
 		float metallic;
 		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
@@ -639,7 +648,7 @@ __global__ void kernShadeSpecular(int rayNum, int spp, Path* rayPool, IntersectI
 	}
 	rayPool[idx] = p;
 }
-__global__ void kernShadeLightSource(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+__global__ void kernShadeLightSource(int rayNum, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
@@ -659,7 +668,7 @@ __global__ void kernShadeLightSource(int rayNum, int spp, Path* rayPool, Interse
 	}
 	rayPool[idx] = p;
 }
-__global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+__global__ void kernShadeGlass(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
@@ -674,7 +683,7 @@ __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo
 		p.color = glm::vec3{ 0.f };
 	}
 	else {
-		auto rng = makeSeededRandomEngine(spp, idx, 0);
+		auto rng = makeSeededRandomEngine(spp, idx, bounce);
 		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 		glm::vec3 normal, albedo;
 		glm::vec3 wo;
@@ -701,7 +710,7 @@ __global__ void kernShadeGlass(int rayNum, int spp, Path* rayPool, IntersectInfo
 	}
 	rayPool[idx] = p;
 }
-__global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+__global__ void kernShadeMicrofacet(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
@@ -721,7 +730,7 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, Intersec
 		p.remainingBounces = 0;
 	}
 	else {
-		auto rng = makeSeededRandomEngine(spp, idx, 0);
+		auto rng = makeSeededRandomEngine(spp, idx, bounce);
 		glm::vec3 normal, albedo;
 		glm::vec3 wo, bsdf;
 		float pdf;
@@ -766,24 +775,24 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, Path* rayPool, Intersec
 	rayPool[idx] = p;
 }
 
-int PathTracer::shade(int rayNum, int spp) {
+int PathTracer::shade(int rayNum, int spp, int bounce) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
 	tik();
 	if (hasMaterial(scene, MTL_TYPE_LIGHT_SOURCE))
-		kernShadeLightSource<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+		kernShadeLightSource<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, devResults1, devMtlBuf);
 
 	if (hasMaterial(scene, MTL_TYPE_LAMBERT))
-		kernShadeLambert<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+		kernShadeLambert<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 
 	if (hasMaterial(scene, MTL_TYPE_SPECULAR))
-		kernShadeSpecular<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+		kernShadeSpecular<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 
 	if (hasMaterial(scene, MTL_TYPE_GLASS))
-		kernShadeGlass<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+		kernShadeGlass<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 
 	if (hasMaterial(scene, MTL_TYPE_MICROFACET))
-		kernShadeMicrofacet<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, devRayPool1, devResults1, devMtlBuf);
+		kernShadeMicrofacet<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 	shadingTime += tok();
 
 	checkCUDAError("kernShading failed.");

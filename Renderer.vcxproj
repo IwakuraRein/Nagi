@@ -38,7 +38,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="Gui.vcxproj">
-      <Project>{ed84a835-c580-4608-bb75-ebbeea87a54a}</Project>
+      <Project>{05d28f1b-4bde-45f0-bd15-ca710d1abdc2}</Project>
     </ProjectReference>
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -85,26 +85,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)bin\int\$(Configuration)\</IntDir>
+    <IntDir>$(SolutionDir)bin\$(ProjectName)-int\$(Configuration)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(SolutionDir)src\3rdparty\json;$(SolutionDir)src\3rdparty\stb;$(SolutionDir)src\3rdparty\tinyobjloader;$(SolutionDir)src\3rdparty\glm\include;$(SolutionDir)src\3rdparty\oidn\include;$(SolutionDir)src\3rdparty\glad\include;$(SolutionDir)src\3rdparty\GLFW\include;$(SolutionDir)src\3rdparty\imgui\include</IncludePath>
     <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(ReferencePath)</ReferencePath>
+    <ReferencePath>$(ReferencePath);$(VC_ReferencesPath_x64);</ReferencePath>
     <LibraryPath>$(SolutionDir)src\3rdparty\oidn\lib;$(SolutionDir)src\3rdparty\GLFW\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)bin\int\$(Configuration)\</IntDir>
+    <IntDir>$(SolutionDir)bin\$(ProjectName)-int\$(Configuration)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(SolutionDir)src\3rdparty\json;$(SolutionDir)src\3rdparty\stb;$(SolutionDir)src\3rdparty\tinyobjloader;$(SolutionDir)src\3rdparty\glm\include;$(SolutionDir)src\3rdparty\oidn\include;$(SolutionDir)src\3rdparty\glad\include;$(SolutionDir)src\3rdparty\GLFW\include;$(SolutionDir)src\3rdparty\imgui\include</IncludePath>
     <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(ReferencePath)</ReferencePath>
+    <ReferencePath>$(ReferencePath);$(VC_ReferencesPath_x64);</ReferencePath>
     <LibraryPath>$(SolutionDir)src\3rdparty\oidn\lib;$(SolutionDir)src\3rdparty\GLFW\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='RelwithDebInfo|x64'">
     <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
-    <IntDir>$(SolutionDir)bin\int\$(Configuration)\</IntDir>
+    <IntDir>$(SolutionDir)bin\$(ProjectName)-int\$(Configuration)\</IntDir>
     <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(SolutionDir)src\3rdparty\json;$(SolutionDir)src\3rdparty\stb;$(SolutionDir)src\3rdparty\tinyobjloader;$(SolutionDir)src\3rdparty\glm\include;$(SolutionDir)src\3rdparty\oidn\include;$(SolutionDir)src\3rdparty\glad\include;$(SolutionDir)src\3rdparty\GLFW\include;$(SolutionDir)src\3rdparty\imgui\include</IncludePath>
     <ExecutablePath>$(VC_ExecutablePath_x64);$(CommonExecutablePath)</ExecutablePath>
-    <ReferencePath>$(ReferencePath)</ReferencePath>
+    <ReferencePath>$(ReferencePath);$(VC_ReferencesPath_x64);</ReferencePath>
     <LibraryPath>$(SolutionDir)src\3rdparty\oidn\lib;$(SolutionDir)src\3rdparty\GLFW\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -123,7 +123,7 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <CompileOut>$(SolutionDir)bin\int\$(Configuration)\%(Filename)%(Extension).obj</CompileOut>
+      <CompileOut>$(SolutionDir)bin\$(ProjectName)-int\$(Configuration)\%(Filename)%(Extension).obj</CompileOut>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
     </CudaCompile>
   </ItemDefinitionGroup>
@@ -147,7 +147,7 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <CompileOut>$(SolutionDir)bin\int\$(Configuration)\%(Filename)%(Extension).obj</CompileOut>
+      <CompileOut>$(SolutionDir)bin\$(ProjectName)-int\$(Configuration)\%(Filename)%(Extension).obj</CompileOut>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
     </CudaCompile>
   </ItemDefinitionGroup>
@@ -171,9 +171,10 @@
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <CompileOut>$(SolutionDir)bin\int\$(Configuration)\%(Filename)%(Extension).obj</CompileOut>
+      <CompileOut>$(SolutionDir)bin\$(ProjectName)-int\$(Configuration)\%(Filename)%(Extension).obj</CompileOut>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
     </CudaCompile>
+    <CudaLink />
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

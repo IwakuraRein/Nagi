@@ -21,13 +21,14 @@ Nagi is a simple path tracer built in CUDA. As shown in the picture, it's capabl
 - [x] Mesh Loading
 - [x] Texture Mapping
 - [x] Denoiser
-- [x] Oct-tree Structure
+- [x] Bounding Volume Hierarchy
 - [x] Refrection
 - [x] Skybox
+- [x] Preview Window
 
 **Working On**
 
-- [ ] Preview Window
+- [ ] Direct Light Sampling
 - [ ] Importance Sampling On Skybox
 - [ ] Multiple Importance Sampling
 

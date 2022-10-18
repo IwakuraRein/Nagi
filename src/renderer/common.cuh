@@ -207,17 +207,6 @@ struct Vertex {
 	}
 	size_t hash() const {
 		size_t seed = 0;
-		//hashCombine(seed, position.x);
-		//hashCombine(seed, position.y);
-		//hashCombine(seed, position.z);
-		//hashCombine(seed, normal.x);
-		//hashCombine(seed, normal.y);
-		//hashCombine(seed, normal.z);
-		//hashCombine(seed, tangent.x);
-		//hashCombine(seed, tangent.y);
-		//hashCombine(seed, tangent.z);
-		//hashCombine(seed, uv.x);
-		//hashCombine(seed, uv.y);
 		hashCombine(
 			seed,
 			position.x,

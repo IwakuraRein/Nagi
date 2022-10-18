@@ -29,13 +29,15 @@ int main(int argc, char* argv[]) {
 		bvh->build();
 		std::unique_ptr<PathTracer> pathTracer = std::make_unique<PathTracer>(scene, *bvh);
 		std::unique_ptr<GUI> gui = std::make_unique<GUI>(
-			"Nagi Preview Window", scene.window.width, scene.window.height, scene.config.gamma, pathTracer->devFrameBuf, pathTracer->devCurrentNormalBuf, pathTracer->devAlbedoBuf, pathTracer->devCurrentDepthBuf);
+			"Nagi Preview Window", scene.window.width, scene.window.height, scene.config.gamma, scene.config.spp, 
+			pathTracer->devFrameBuf, pathTracer->devAlbedoBuf, pathTracer->devCurrentNormalBuf, pathTracer->devCurrentDepthBuf, pathTracer->devNormalBuf, pathTracer->devDepthBuf);
 
 		std::cout << "Start ray tracing..." << std::endl;
+
 		while (!pathTracer->finish()) {
-			pathTracer->iterate();
+			float delta = pathTracer->iterate();
 			if (!gui->terminated())
-				gui->render();
+				gui->render(delta);
 		}
 		std::cout << "Ray tracing finished." << std::endl;
 

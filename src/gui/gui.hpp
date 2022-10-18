@@ -21,21 +21,19 @@
 
 #include <iostream>
 #include <cstdio>
+#include <chrono>
 #include <memory>
 #include <exception>
 #include <string>
 
 #define BLOCK_SIZE 128
 
-inline void glfw_error_callback(int error, const char* description)
-{
-	std::string error_msg = "Glfw Error ";
+inline void glfw_error_callback(int error, const char* description) {
+	std::string error_msg = "GLFW Error: ";
 	error_msg += error;
 	error_msg += description;
     throw std::runtime_error(error_msg);
 }
-
-int imGuiDemo();
 
 #define FILTER_SIZE 9
 #define FILTER_SIZE_HALF 4
@@ -62,7 +60,8 @@ namespace nagi {
     
 class GUI {
 public:
-	GUI(const std::string& windowName, int w, int h, float gamma, float* devResultBuffer, float* devNormalBuffer, float* devAlbedoBuffer, float* devDepthBuffer);
+	GUI(const std::string& windowName, int w, int h, float gamma, int spp,
+		float* devResult, float* devAlbedo, float* devNormal, float* devDepth, float* devFinalNormal, float* devFinalDepth);
 	~GUI() { terminate(); }
 	GUI(const GUI&) = delete;
 	void operator=(const GUI&) = delete;
@@ -71,23 +70,32 @@ public:
 		return window == nullptr;
 	}
 	void terminate();
-	void denoise() {}
-	void render();
+	void denoise();
+	void render(float delta);
 	void copyToFrameBuffer();
 
 	glm::vec4 clearColor{ 0.45f, 0.55f, 0.60f, 1.00f };
 
 	GLFWwindow* window = nullptr;
 	int width, height, pixels;
-	unsigned int counter{ 1 };
+	int step{ 1 };
+	int totalSpp;
 	float gamma;
+	int present{ 0 };
+	float sigmaN{ 64.f }, sigmaZ{ 1.f }, sigmaL{ 4.f };
+	bool denoiser{ false };
 	GLuint pbo;
 	cudaGraphicsResource* regesitered_pbo;
 	uchar4* devFrameBuffer{ nullptr };
-	float* devResultBuffer{ nullptr };
-	float* devNormalBuffer{ nullptr };
-	float* devAlbedoBuffer{ nullptr };
-	float* devDepthBuffer{ nullptr };
+	float* devDenoisedResult1{ nullptr };
+	float* devDenoisedResult2{ nullptr };
+	float* devResult{ nullptr };
+	float* devNormal{ nullptr };
+	float* devAlbedo{ nullptr };
+	float* devDepth{ nullptr };
+
+	float* devFinalNormal{ nullptr };
+	float* devFinalDepth{ nullptr };
 };
 
 }
