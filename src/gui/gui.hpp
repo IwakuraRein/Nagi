@@ -25,6 +25,8 @@
 #include <memory>
 #include <exception>
 #include <string>
+#include <vector>
+#include <list>
 
 #define BLOCK_SIZE 128
 
@@ -35,26 +37,32 @@ inline void glfw_error_callback(int error, const char* description) {
     throw std::runtime_error(error_msg);
 }
 
-#define FILTER_SIZE 9
-#define FILTER_SIZE_HALF 4
-#define FILTER_AREA 81
-#define FILTER_AREA_HALF 40
+template <typename T>
+inline T listSum(const std::list<T> s) {
+	T sum;
+	for (auto& it = s.begin(); it != s.end(); it++) {
+		sum += *it;
+	}
+	return sum;
+}
+
+#define FILTER_SIZE 5
+#define FILTER_SIZE_HALF 2
+#define FILTER_AREA 25
+#define FILTER_AREA_HALF 12
 
 // CUDA 11.3 has added device code support for new C++ keywords: `constexpr` and `auto`.
 // In CUDA C++, `__device__` and `__constant__` variables can now be declared `constexpr`.
 // The constexpr variables can be used in constant expressions, where they are evaluated at
 // compile time, or as normal variables in contexts where constant expressions are not required.
 
-__device__ constexpr float devGaussianKernel[81]{
-	1.f / 65536.f, 8.f / 65536.f, 28.f / 65536.f, 56.f / 65536.f, 70.f / 65536.f, 56.f / 65536.f, 28.f / 65536.f, 8.f / 65536.f, 1.f / 65536.f,
-	8.f / 65536.f, 64.f / 65536.f, 224.f / 65536.f, 448.f / 65536.f, 560.f / 65536.f, 448.f / 65536.f, 224.f / 65536.f, 64.f / 65536.f, 8.f / 65536.f,
-	28.f / 65536.f, 224.f / 65536.f, 784.f / 65536.f, 1568.f / 65536.f, 1960.f / 65536.f, 1568.f / 65536.f, 784.f / 65536.f, 224.f / 65536.f, 28.f / 65536.f,
-	56.f / 65536.f, 448.f / 65536.f, 1568.f / 65536.f, 3136.f / 65536.f, 3920.f / 65536.f, 3136.f / 65536.f, 1568.f / 65536.f, 448.f / 65536.f, 56.f / 65536.f,
-	70.f / 65536.f, 560.f / 65536.f, 1960.f / 65536.f, 3920.f / 65536.f, 4900.f / 65536.f, 3920.f / 65536.f, 1960.f / 65536.f, 560.f / 65536.f, 70.f / 65536.f,
-	56.f / 65536.f, 448.f / 65536.f, 1568.f / 65536.f, 3136.f / 65536.f, 3920.f / 65536.f, 3136.f / 65536.f, 1568.f / 65536.f, 448.f / 65536.f, 56.f / 65536.f,
-	28.f / 65536.f, 224.f / 65536.f, 784.f / 65536.f, 1568.f / 65536.f, 1960.f / 65536.f, 1568.f / 65536.f, 784.f / 65536.f, 224.f / 65536.f, 28.f / 65536.f,
-	8.f / 65536.f, 64.f / 65536.f, 224.f / 65536.f, 448.f / 65536.f, 560.f / 65536.f, 448.f / 65536.f, 224.f / 65536.f, 64.f / 65536.f, 8.f / 65536.f,
-	1.f / 65536.f, 8.f / 65536.f, 28.f / 65536.f, 56.f / 65536.f, 70.f / 65536.f, 56.f / 65536.f, 28.f / 65536.f, 8.f / 65536.f, 1.f / 65536.f };
+__device__ constexpr float devGaussianKernel[25]{
+	1.f/* / 273.f*/, 4.f /* / 273.f*/, 7.f /* / 273.f*/, 4.f /* / 273.f*/, 1.f/* / 273.f*/,
+	4.f/* / 273.f*/, 16.f/* / 273.f*/, 26.f/* / 273.f*/, 16.f/* / 273.f*/, 4.f/* / 273.f*/,
+	7.f/* / 273.f*/, 26.f/* / 273.f*/, 41.f/* / 273.f*/, 26.f/* / 273.f*/, 7.f/* / 273.f*/,
+	4.f/* / 273.f*/, 16.f/* / 273.f*/, 26.f/* / 273.f*/, 16.f/* / 273.f*/, 4.f/* / 273.f*/,
+	1.f/* / 273.f*/, 4.f /* / 273.f*/, 7.f /* / 273.f*/, 4.f /* / 273.f*/, 1.f/* / 273.f*/
+};
 
 namespace nagi {
     

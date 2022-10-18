@@ -34,12 +34,15 @@ int main(int argc, char* argv[]) {
 
 		std::cout << "Start ray tracing..." << std::endl;
 
+		std::chrono::steady_clock::time_point startPoint = std::chrono::high_resolution_clock::now();
+		std::chrono::steady_clock::time_point timer = std::chrono::high_resolution_clock::now();
 		while (!pathTracer->finish()) {
-			float delta = pathTracer->iterate();
+			pathTracer->iterate();
 			if (!gui->terminated())
-				gui->render(delta);
+				gui->render(std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count());
+			timer = std::chrono::high_resolution_clock::now();
 		}
-		std::cout << "Ray tracing finished." << std::endl;
+		std::cout << "Ray tracing finished. Total Time " << std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - startPoint).count() << " seconds." << std::endl;
 
 		auto frameBuf = pathTracer->getFrameBuffer();
 		saveHDR(scene.window, frameBuf.get(), 3, saveDir + "/nagi_result_");

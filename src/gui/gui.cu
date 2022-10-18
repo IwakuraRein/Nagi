@@ -109,7 +109,12 @@ void GUI::render(float delta) {
             ImGui::Begin("Preview Control Panel");
 
             ImGui::Text("Step: %d.", step);
-            ImGui::Text("Time remaining: % f sec.", delta * (totalSpp - step));
+            static std::list<float> stack;
+            stack.push_back(delta);
+            if (stack.size() > 10) stack.pop_front();
+            float avg = listSum(stack) / stack.size();
+
+            ImGui::Text("Time remaining: % f sec.", avg * (totalSpp - step));
 
             ImGui::Text("Present"); ImGui::SameLine();
             static const char* items[] = { "Result", "Albedo", "Normal", "Depth"};

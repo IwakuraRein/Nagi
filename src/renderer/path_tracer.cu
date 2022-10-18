@@ -151,8 +151,7 @@ PathTracer::~PathTracer() {
 }
 
 // intersection test -> compact rays -> sort rays according to material -> compute color -> compact rays -> intersection test...
-float PathTracer::iterate() {
-
+void PathTracer::iterate() {
 	std::chrono::steady_clock::time_point timer = std::chrono::high_resolution_clock::now();
 #ifdef DEB_INFO
 	std::cout << "  Begin iteration " << spp << ". " << scene.config.spp - spp << " remaining." << std::endl;
@@ -208,8 +207,6 @@ float PathTracer::iterate() {
 	shadingTime = 0.f;
 	gbufferTime = 0.f;
 #endif // DEB_INFO
-
-	return delta;
 }
 
 __global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out) {

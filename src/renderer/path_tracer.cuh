@@ -79,7 +79,7 @@ public:
 
 	void allocateBuffers();
 	void destroyBuffers();
-	float iterate();
+	void iterate();
 
 	int intersectionTest(int rayNum);
 	// sort rays according to materials
