@@ -5,8 +5,7 @@ namespace nagi {
 
 std::unique_ptr<float[]> Denoiser::denoise() {
 	if (!devDenoised) {
-		cudaMalloc((void**)&devDenoised, sizeof(float) * window.pixels * 3);
-		checkCUDAError("cudaMalloc devDenoised failed.");
+		cudaRun(cudaMalloc((void**)&devDenoised, sizeof(float) * window.pixels * 3));
 	}
 	std::cout << "Starting denoising... ";
 	std::chrono::steady_clock::time_point timer;
@@ -17,12 +16,9 @@ std::unique_ptr<float[]> Denoiser::denoise() {
 	std::unique_ptr<float[]> albedoBuf{ new float[window.pixels * 3] };
 	std::unique_ptr<float[]> normalBuf{ new float[window.pixels * 3] };
 	std::unique_ptr<float[]> denoisedBuf{ new float[window.pixels * 3] };
-	cudaMemcpy(frameBuf.get(), pathTracer.devFrameBuf, sizeof(float) * window.pixels * 3, cudaMemcpyDeviceToHost);
-	checkCUDAError("cudaMemcpy devFrameBuf failed.");
-	cudaMemcpy(albedoBuf.get(), pathTracer.devAlbedoBuf, sizeof(float) * window.pixels * 3, cudaMemcpyDeviceToHost);
-	checkCUDAError("cudaMemcpy devAlbedoBuf failed.");
-	cudaMemcpy(normalBuf.get(), pathTracer.devNormalBuf, sizeof(float) * window.pixels * 3, cudaMemcpyDeviceToHost);
-	checkCUDAError("cudaMemcpy devNormalBuf failed.");
+	cudaRun(cudaMemcpy(frameBuf.get(), pathTracer.devFrameBuf, sizeof(float) * window.pixels * 3, cudaMemcpyDeviceToHost));
+	cudaRun(cudaMemcpy(albedoBuf.get(), pathTracer.devAlbedoBuf, sizeof(float) * window.pixels * 3, cudaMemcpyDeviceToHost));
+	cudaRun(cudaMemcpy(normalBuf.get(), pathTracer.devNormalBuf, sizeof(float) * window.pixels * 3, cudaMemcpyDeviceToHost));
 
 	auto device = oidn::newDevice();
 	device.commit();
@@ -48,8 +44,7 @@ std::unique_ptr<float[]> Denoiser::denoise() {
 
 Denoiser::~Denoiser() {
 	if (devDenoised) {
-		cudaFree(devDenoised);
-		checkCUDAError("cudaFree devDenoised failed.");
+		cudaRun(cudaFree(devDenoised));
 	}
 }
 

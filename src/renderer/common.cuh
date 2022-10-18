@@ -87,24 +87,15 @@ inline __device__ __host__ glm::vec3 halfway(const glm::vec3& v, const glm::vec3
 	return glm::normalize(v+l);
 }
 
-inline void checkCUDAError(const char* msg) {
-	cudaError_t err = cudaGetLastError();
-	if (cudaSuccess != err) {
-		std::string errMsg{"Cuda error: "};
-		errMsg += msg;
-		errMsg += cudaGetErrorString(err);
-		throw std::runtime_error(errMsg);
-	}
-}
-inline void checkCUDAError2(const char* msg) {
-	cudaError_t err = cudaGetLastError();
-	if (cudaSuccess != err) {
-		std::string errMsg{"Cuda error: "};
-		errMsg += msg;
-		errMsg += cudaGetErrorString(err);
-		std::cerr << errMsg << std::endl;
-	}
-}
+#define cudaRun(call)                             \
+	{                                             \
+		cudaError_t err = call;                   \
+		if (err != cudaSuccess) {                 \
+			std::string err_msg{ "CUDA Error: "}; \
+			err_msg += cudaGetErrorString(err);   \
+			throw std::runtime_error(err_msg);    \
+		}                                         \
+	}                                             \
 
 inline __host__ __device__ unsigned int hash(unsigned int a) {
 	a = (a + 0x7ed55d16) + (a << 12);

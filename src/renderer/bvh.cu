@@ -4,8 +4,7 @@ namespace nagi {
 
 BVH::~BVH() {
 	if (devTree) {
-		cudaFree(devTree);
-		checkCUDAError("cudaFree devTree failed.");
+		cudaRun(cudaFree(devTree));
 	}
 	//if (devTreeTrigIdx) {
 	//	cudaFree(devTreeTrigIdx);
@@ -25,11 +24,9 @@ void BVH::build() {
 		convertTreeNode(orig);
 	}
 
-	cudaMalloc((void**)&devTree, sizeof(Node) * tree.size());
-	checkCUDAError("cudaMalloc devTree failed.");
+	cudaRun(cudaMalloc((void**)&devTree, sizeof(Node) * tree.size()));
 
-	cudaMemcpy(devTree, tree.data(), sizeof(Node) * tree.size(), cudaMemcpyHostToDevice);
-	checkCUDAError("cudaMemcpy devTree failed.");
+	cudaRun(cudaMemcpy(devTree, tree.data(), sizeof(Node) * tree.size(), cudaMemcpyHostToDevice));
 
 	float runningTime = std::chrono::duration<float>(std::chrono::high_resolution_clock::now() - timer).count();
 	std::cout << "Done. Time cost : " << runningTime << " seconds." << std::endl;

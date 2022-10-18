@@ -2,10 +2,8 @@
 
 namespace nagi {
 
-GUI::GUI(const std::string& windowName, int w, int h, float gamma, int spp,
-    float* devResult, float* devAlbedo, float* devNormal, float* devDepth, float* devFinalNormal, float* devFinalDepth) :
-    width{ w }, height{ h }, pixels{ w * h }, gamma{ gamma }, totalSpp{ spp }, 
-    devResult{ devResult }, devNormal{ devNormal }, devAlbedo{ devAlbedo }, devDepth{ devDepth }, devFinalNormal{ devFinalNormal }, devFinalDepth{ devFinalDepth } {
+GUI::GUI(const std::string& windowName, PathTracer& pathTracer):
+    pathTracer{ pathTracer }, scene{ pathTracer.scene }, wSize{ pathTracer.window }, gamma{ scene.config.gamma }, totalSpp{ scene.config.spp } {
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit())
         throw std::runtime_error("Error: Failed to initialize GLFW.");
@@ -17,7 +15,7 @@ GUI::GUI(const std::string& windowName, int w, int h, float gamma, int spp,
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     // Disable resizing window
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    window = glfwCreateWindow(width, height, windowName.c_str(), nullptr, nullptr);
+    window = glfwCreateWindow(wSize.width, wSize.height, windowName.c_str(), nullptr, nullptr);
     if (window == nullptr) {
         throw std::runtime_error("Error: Failed to create GLFW window.");
     }
@@ -41,21 +39,14 @@ GUI::GUI(const std::string& windowName, int w, int h, float gamma, int spp,
 
     glGenBuffers(1, &pbo); // make & register PBO
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, 4 * sizeof(GLubyte) * width * height, NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, 4 * sizeof(GLubyte) * wSize.width * wSize.height, NULL, GL_DYNAMIC_DRAW);
 
-    if (cudaGraphicsGLRegisterBuffer(&regesitered_pbo, pbo, cudaGraphicsRegisterFlagsWriteDiscard) != CUDA_SUCCESS) {
-        throw std::runtime_error("Error: Failed to register pbo.");
-    }
+    cudaRun(cudaGraphicsGLRegisterBuffer(&regesitered_pbo, pbo, cudaGraphicsRegisterFlagsWriteDiscard));
 }
 void GUI::terminate() {
     if (window) {
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-        //if (cudaGLUnregisterBufferObject(pbo) != CUDA_SUCCESS) {
-        //    throw std::runtime_error("Error: Failed to unrgister device pointer.");
-        //}
-        if (cudaGraphicsUnregisterResource(regesitered_pbo) != CUDA_SUCCESS) {
-            throw std::runtime_error("Error: Failed to unrgister pbo.");
-        }
+        cudaRun(cudaGraphicsUnregisterResource(regesitered_pbo));
         glDeleteBuffers(1, &pbo);
 
         ImGui_ImplOpenGL3_Shutdown();
@@ -68,12 +59,16 @@ void GUI::terminate() {
         window = nullptr;
     }
 
+    if (devLuminance) {
+        cudaRun(cudaFree(devLuminance));
+        devLuminance = nullptr;
+    }
     if (devDenoisedResult1) {
-        cudaFree(devDenoisedResult1);
+        cudaRun(cudaFree(devDenoisedResult1));
         devDenoisedResult1 = nullptr;
     }
     if (devDenoisedResult2) {
-        cudaFree(devDenoisedResult2);
+        cudaRun(cudaFree(devDenoisedResult2));
         devDenoisedResult2 = nullptr;
     }
 }
@@ -97,7 +92,7 @@ void GUI::render(float delta) {
 
         // display rendering result via OpenGL
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo); // THE MAGIC LINE #1 
-        glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        glDrawPixels(wSize.width, wSize.height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);   // THE MAGIC LINE #2
 
 		// Start the Dear ImGui frame
@@ -108,20 +103,20 @@ void GUI::render(float delta) {
         {
             ImGui::Begin("Preview Control Panel");
 
-            ImGui::Text("Step: %d.", step);
+            ImGui::Text("Step          : %d.", step);
             static std::list<float> stack;
             stack.push_back(delta);
             if (stack.size() > 10) stack.pop_front();
             float avg = listSum(stack) / stack.size();
 
-            ImGui::Text("Time remaining: % f sec.", avg * (totalSpp - step));
+            ImGui::Text("Time remaining: %f sec.", avg * (totalSpp - step));
 
             ImGui::Text("Present"); ImGui::SameLine();
             static const char* items[] = { "Result", "Albedo", "Normal", "Depth"};
             ImGui::Combo("##Present", &present, items, 4);
 
-            if (present == 0 || present == 3) {
-                ImGui::Text("Gamma"); ImGui::SameLine();
+            if (present != 2) {
+                ImGui::Text("Gamma  "); ImGui::SameLine();
                 ImGui::SliderFloat("##Gamma", &gamma, 0.0f, 5.0f);
             }
             if (present == 0) {
@@ -151,14 +146,14 @@ void GUI::render(float delta) {
 }
 
 
-__global__ void kernCopyResultToFrameBuffer(uchar4* pbo, int width, int height, int pixels, float gamma, float* buffer, float blend) {
+__global__ void kernCopyResultToFrameBuffer(uchar4* pbo, WindowSize window,float gamma, float* buffer, float blend) {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= pixels) return;
+    if (idx >= window.pixels) return;
 
-    int py = idx / width;
-    int px = idx - py * width;
+    int py = idx / window.width;
+    int px = idx - py * window.width;
 
-    int idx2 = (height - py - 1) * width + px;
+    int idx2 = (window.height - py - 1) * window.width + px;
     //int idx2 = idx;
 
     glm::vec3 color{ buffer[idx * 3], buffer[idx * 3 + 1], buffer[idx * 3 + 2] };
@@ -174,32 +169,32 @@ __global__ void kernCopyResultToFrameBuffer(uchar4* pbo, int width, int height, 
     pbo[idx2].z = glm::clamp((unsigned char)color.z, (unsigned char)0, (unsigned char)255);
     pbo[idx2].w = 0;
 }
-__global__ void kernCopyAlbedoToFrameBuffer(uchar4* pbo, int width, int height, int pixels, float* albedo) {
+__global__ void kernCopyAlbedoToFrameBuffer(uchar4* pbo, WindowSize window,float gamma, float* albedo) {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= pixels) return;
+    if (idx >= window.pixels) return;
 
-    int py = idx / width;
-    int px = idx - py * width;
+    int py = idx / window.width;
+    int px = idx - py * window.width;
 
-    int idx2 = (height - py - 1) * width + px;
+    int idx2 = (window.height - py - 1) * window.width + px;
     //int idx2 = idx;
 
     glm::vec3 color{ albedo[idx * 3], albedo[idx * 3 + 1], albedo[idx * 3 + 2] };
-    color *= 255.f;
+    color = glm::pow(color, glm::vec3{ 1.f / gamma }) * 255.f;
 
     pbo[idx2].x = glm::clamp((unsigned char)color.x, (unsigned char)0, (unsigned char)255);
     pbo[idx2].y = glm::clamp((unsigned char)color.y, (unsigned char)0, (unsigned char)255);
     pbo[idx2].z = glm::clamp((unsigned char)color.z, (unsigned char)0, (unsigned char)255);
     pbo[idx2].w = 0;
 }
-__global__ void kernCopyNormalToFrameBuffer(uchar4* pbo, int width, int height, int pixels, float* normal) {
+__global__ void kernCopyNormalToFrameBuffer(uchar4* pbo, WindowSize window,float* normal) {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= pixels) return;
+    if (idx >= window.pixels) return;
 
-    int py = idx / width;
-    int px = idx - py * width;
+    int py = idx / window.width;
+    int px = idx - py * window.width;
 
-    int idx2 = (height - py - 1) * width + px;
+    int idx2 = (window.height - py - 1) * window.width + px;
     //int idx2 = idx;
 
     glm::vec3 color{ normal[idx * 3], normal[idx * 3 + 1], normal[idx * 3 + 2] };
@@ -211,14 +206,14 @@ __global__ void kernCopyNormalToFrameBuffer(uchar4* pbo, int width, int height, 
     pbo[idx2].z = glm::clamp((unsigned char)color.z, (unsigned char)0, (unsigned char)255);
     pbo[idx2].w = 0;
 }
-__global__ void kernCopyDepthToFrameBuffer(uchar4* pbo, int width, int height, int pixels, float gamma, float* depth) {
+__global__ void kernCopyDepthToFrameBuffer(uchar4* pbo, WindowSize window,float gamma, float* depth) {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= pixels) return;
+    if (idx >= window.pixels) return;
 
-    int py = idx / width;
-    int px = idx - py * width;
+    int py = idx / window.width;
+    int px = idx - py * window.width;
 
-    int idx2 = (height - py - 1) * width + px;
+    int idx2 = (window.height - py - 1) * window.width + px;
     //int idx2 = idx;
 
     float z = depth[idx] * 255.f;
@@ -231,45 +226,48 @@ __global__ void kernCopyDepthToFrameBuffer(uchar4* pbo, int width, int height, i
 }
 
 void GUI::copyToFrameBuffer() {
-    if (cudaGraphicsMapResources(1, &regesitered_pbo, NULL) != CUDA_SUCCESS) {
-        throw std::runtime_error("Error: Failed to map pbo.");
-    }
-    if (cudaGraphicsResourceGetMappedPointer((void**)&devFrameBuffer, NULL, regesitered_pbo) != CUDA_SUCCESS) {
-        throw std::runtime_error("Error: Failed to get device pointer.");
-    }
+    cudaRun(cudaGraphicsMapResources(1, &regesitered_pbo, NULL));
+    cudaRun(cudaGraphicsResourceGetMappedPointer((void**)&devFrameBuffer, NULL, regesitered_pbo))
 
     static bool isDenoised{ denoiser };
-    dim3 blocksPerGrid((pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    dim3 blocksPerGrid((wSize.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
     if (present == 0) { // result
         if (!denoiser) {
             isDenoised = false;
-            kernCopyResultToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, width, height, pixels, gamma, devResult, 0.f);
+            kernCopyResultToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, gamma, pathTracer.devFrameBuf, 0.f);
         }
         else {
             denoise();
             float blend = isDenoised ? 0.5f : 0.f;
-            kernCopyResultToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, width, height, pixels, gamma, devDenoisedResult2, blend);
+            kernCopyResultToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, gamma, devDenoisedResult2, blend);
             isDenoised = true;
         }
     }
     else if (present == 1) { // albedo
-        kernCopyAlbedoToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, width, height, pixels, devAlbedo);
+        isDenoised = false;
+        kernCopyAlbedoToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, gamma, pathTracer.devAlbedoBuf);
     }
     else if (present == 2) { // normal
-        kernCopyNormalToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, width, height, pixels, devFinalNormal);
+        isDenoised = false;
+        kernCopyNormalToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, pathTracer.devNormalBuf);
     }
     else if (present == 3) { // depth
-        kernCopyDepthToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, width, height, pixels, gamma, devFinalDepth);
+        isDenoised = false;
+        kernCopyDepthToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, gamma, pathTracer.devDepthBuf);
     }
 
-    cudaDeviceSynchronize();
-    if (cudaGraphicsUnmapResources(1, &regesitered_pbo, NULL) != CUDA_SUCCESS) {
-        throw std::runtime_error("Error: Failed to unmap pbo.");
-    }
+    cudaRun(cudaDeviceSynchronize());
+    cudaRun(cudaGraphicsUnmapResources(1, &regesitered_pbo, NULL))
 }
 
-__global__ void kernGenerateLuminance(int pixels, float* result, float* color, float* albedo) {
+__global__ void kernGetY(int pixels, float* result, float* color) {
+    int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    if (idx >= pixels) return;
+
+    result[idx] = color[idx * 3] * 0.299f + color[idx * 3 + 1] * 0.587f + color[idx * 3 + 2] * 0.114f;
+}
+__global__ void kernDiscardColor(int pixels, float* result, float* color, float* albedo) {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= pixels) return;
 
@@ -300,14 +298,34 @@ __global__ void kernRetrieveColor(int pixels, float* result, float* luminance, f
 
 //todo: optimization with shared memeory
 __global__ void kernBilateralFilter(
-    int width, int height, int pixels, int dilation, float* denoised, float* luminance, float* normal, float* depth, float sigmaN, float sigmaZ, float sigmaL) {
+    WindowSize window, int dilation, float* denoised, float* origin, float* luminance, float* luminance2, float* normal, float* depth, float sigmaN, float sigmaZ, float sigmaL) {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx >= pixels) return;
+    if (idx >= window.pixels) return;
 
-    int py = idx / width;
-    int px = idx - py * width;
+    int py = idx / window.width;
+    int px = idx - py * window.width;
 
-    glm::vec3 thisL{ luminance[idx * 3], luminance[idx * 3 + 1], luminance[idx * 3 + 2] };
+    float variance{ 0.f };
+    float var_w{ 0.f };
+#pragma unroll
+    for (int i = -1; i < 1; i++) {
+#pragma unroll
+        for (int j = -1; j < 1; j++) {
+            int p = window.width * (py + i) + px + j;
+            if (p >= 0 && p < window.pixels) {
+                float y2 = luminance2[p];
+                float y = luminance[p];
+                variance += sqrtf(fabsf(y2 - y * y)) * devGaussianKernel3x3[4 + i * 3 + j];
+                var_w += devGaussianKernel3x3[4 + i * 3 + j];
+            }
+        }
+    }
+
+    variance /= (1.f + variance) * var_w;
+    variance = fmaxf(VAR_EPSILON, variance);
+
+    //float thisL = luminance[idx];
+    glm::vec3 thisL{ origin[idx * 3], origin[idx * 3+1], origin[idx * 3+2] };
     glm::vec3 thisN{ normal[idx * 3], normal[idx * 3 + 1], normal[idx * 3 + 2] };
     float thisZ{ depth[idx] };
     glm::vec3 out{ 0.f };
@@ -318,26 +336,30 @@ __global__ void kernBilateralFilter(
     for (int i = -FILTER_SIZE_HALF; i <= FILTER_SIZE_HALF; i++) {
 #pragma unroll
         for (int j = -FILTER_SIZE_HALF; j <= FILTER_SIZE_HALF; j++) {
-            int p = width * (py + i * dilation) + px + j * dilation;
-            if (p == idx) {
-                out += thisL * devGaussianKernel[FILTER_AREA_HALF];
-                wSum += devGaussianKernel[FILTER_AREA_HALF];
-            }
-            else if (p >= 0 && p < pixels) {
-                glm::vec3 n{ normal[p * 3], normal[p * 3 + 1], normal[p * 3 + 2] };
-                glm::vec3 l{ luminance[p * 3], luminance[p * 3 + 1], luminance[p * 3 + 2] };
-                float z = depth[p];
+            int p = window.width * (py + i * dilation) + px + j * dilation;
+            if (p >= 0 && p < window.pixels) {
+                glm::vec3 c{ origin[p * 3], origin[p * 3 + 1], origin[p * 3 + 2] };
+                if (p == idx) {
+                    out += c * devGaussianKernel[FILTER_AREA_HALF];
+                    wSum += devGaussianKernel[FILTER_AREA_HALF];
+                }
+                else {
+                    glm::vec3 n{ normal[p * 3], normal[p * 3 + 1], normal[p * 3 + 2] };
+                    glm::vec3 l{ origin[p * 3], origin[p * 3 + 1], origin[p * 3 + 2] };
+                    float z = depth[p];
 
-                float wn = powf(fmaxf(0.f, glm::dot(thisN, n)), sigmaN);
-                float wz_tmp = -fabsf(thisZ - z) / sigmaZ;
-                glm::vec3 w{
-                    __expf(-fabsf(thisL.x - l.x) / sigmaL + wz_tmp),
-                    __expf(-fabsf(thisL.y - l.y) / sigmaL + wz_tmp),
-                    __expf(-fabsf(thisL.z - l.z) / sigmaL + wz_tmp) };
-                //w = w * wn / (fabsf(i * dilation) + fabsf(j * dilation));
-                w = w * wn * devGaussianKernel[FILTER_AREA_HALF + i * FILTER_SIZE + j];
-                out += w * l;
-                wSum += w;
+                    float wn = powf(fmaxf(0.f, glm::dot(thisN, n)), sigmaN);
+                    float wz_tmp = -fabsf(thisZ - z) / sigmaZ;
+                    glm::vec3 diff{ thisL - l };
+                    float sigmaL2 = sigmaL * variance + FLT_EPSILON;
+                    glm::vec3 w{ __expf(-fabsf(diff.x) / sigmaL2 + wz_tmp),
+                                 __expf(-fabsf(diff.y) / sigmaL2 + wz_tmp), 
+                                 __expf(-fabsf(diff.z) / sigmaL2 + wz_tmp) };
+                    //w = w * wn / (fabsf(i * dilation) + fabsf(j * dilation));
+                    w = w * wn * devGaussianKernel[FILTER_AREA_HALF + i * FILTER_SIZE + j];
+                    out += w * c;
+                    wSum += w;
+                }
             }
         }
     }
@@ -348,26 +370,34 @@ __global__ void kernBilateralFilter(
 }
 
 void GUI::denoise() {
-    dim3 blocksPerGrid((pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    dim3 blocksPerGrid((wSize.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    if (!devLuminance) {
+        cudaRun(cudaMalloc((void**)&devLuminance, sizeof(float) * wSize.pixels));
+    }
     if (!devDenoisedResult1) {
-        cudaMalloc((void**)&devDenoisedResult1, sizeof(float) * 3 * pixels);
+        cudaRun(cudaMalloc((void**)&devDenoisedResult1, sizeof(float) * 3 * wSize.pixels));
     }
     if (!devDenoisedResult2) {
-        cudaMalloc((void**)&devDenoisedResult2, sizeof(float) * 3 * pixels);
+        cudaRun(cudaMalloc((void**)&devDenoisedResult2, sizeof(float) * 3 * wSize.pixels));
     }
     
-	kernGenerateLuminance<<<blocksPerGrid, BLOCK_SIZE>>>(pixels, devDenoisedResult1, devResult, devAlbedo);
+    kernDiscardColor<<<blocksPerGrid, BLOCK_SIZE>>>(wSize.pixels, devDenoisedResult1, pathTracer.devFrameBuf, pathTracer.devAlbedoBuf);
+    kernGetY<<<blocksPerGrid, BLOCK_SIZE>>>(wSize.pixels, devLuminance, devDenoisedResult1);
     
-	kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(width, height, pixels, 1, devDenoisedResult2, devDenoisedResult1, devNormal, devDepth, sigmaN, sigmaZ, sigmaL);
-    std::swap(devDenoisedResult1, devDenoisedResult2);
-    kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(width, height, pixels, 2, devDenoisedResult2, devDenoisedResult1, devNormal, devDepth, sigmaN, sigmaZ, sigmaL);
-    std::swap(devDenoisedResult1, devDenoisedResult2);
-    kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(width, height, pixels, 4, devDenoisedResult2, devDenoisedResult1, devNormal, devDepth, sigmaN, sigmaZ, sigmaL);
-    std::swap(devDenoisedResult1, devDenoisedResult2);
-    kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(width, height, pixels, 8, devDenoisedResult2, devDenoisedResult1, devNormal, devDepth, sigmaN, sigmaZ, sigmaL);
-    std::swap(devDenoisedResult1, devDenoisedResult2);
-    
-    kernRetrieveColor<<<blocksPerGrid, BLOCK_SIZE>>>(pixels, devDenoisedResult2, devDenoisedResult1, devAlbedo);
+	kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(
+		wSize, 1, devDenoisedResult2, devDenoisedResult1, devLuminance, pathTracer.devLumiance2Buf, pathTracer.devCurrentNormalBuf, pathTracer.devCurrentDepthBuf, sigmaN, sigmaZ, sigmaL);
+	std::swap(devDenoisedResult1, devDenoisedResult2);
+	kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(
+		wSize, 2, devDenoisedResult2, devDenoisedResult1, devLuminance, pathTracer.devLumiance2Buf, pathTracer.devCurrentNormalBuf, pathTracer.devCurrentDepthBuf, sigmaN, sigmaZ, sigmaL);
+	std::swap(devDenoisedResult1, devDenoisedResult2);
+	kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(
+		wSize, 4, devDenoisedResult2, devDenoisedResult1, devLuminance, pathTracer.devLumiance2Buf, pathTracer.devCurrentNormalBuf, pathTracer.devCurrentDepthBuf, sigmaN, sigmaZ, sigmaL);
+	std::swap(devDenoisedResult1, devDenoisedResult2);
+	kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(
+		wSize, 8, devDenoisedResult2, devDenoisedResult1, devLuminance, pathTracer.devLumiance2Buf, pathTracer.devCurrentNormalBuf, pathTracer.devCurrentDepthBuf, sigmaN, sigmaZ, sigmaL);
+	std::swap(devDenoisedResult1, devDenoisedResult2);
+
+	kernRetrieveColor<<<blocksPerGrid, BLOCK_SIZE>>>(wSize.pixels, devDenoisedResult2, devDenoisedResult1, pathTracer.devAlbedoBuf);
 }
 
 
