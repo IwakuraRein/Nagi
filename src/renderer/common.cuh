@@ -290,6 +290,7 @@ struct Configuration {
 	int maxBounce{ 8 };
 	bool denoiser{ false };
 	float gamma{ 2.2f };
+	float exposure{ 0.f };
 };
 
 struct Scene {

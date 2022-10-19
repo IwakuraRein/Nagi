@@ -102,6 +102,8 @@ void SceneLoader::loadConfig() {
 			scene.window.invWidth = 1.f / (float)scene.window.width;
 			scene.window.invHeight = 1.f / (float)scene.window.height;
 		}
+		if (item.key() == "exposure")
+			config.exposure = item.value();
 		if (item.key() == "gamma")
 			config.gamma = item.value();
 		if (item.key() == "sample rate")

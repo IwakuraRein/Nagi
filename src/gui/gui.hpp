@@ -82,7 +82,7 @@ public:
 	WindowSize& wSize;
 	int step{ 1 };
 	int totalSpp;
-	float gamma;
+	float gamma, exposure;
 	int present{ 0 };
 	float sigmaN{ 64.f }, sigmaZ{ 1.f }, sigmaL{ 4.f };
 	bool denoiser{ false };
@@ -108,7 +108,7 @@ public:
 		timerStarted = false;
 		return t;
 	}
-	float denoiseTime;
+	float denoiseTime, denoiseTimeAvg;
 };
 
 }

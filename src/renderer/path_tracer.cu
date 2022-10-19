@@ -401,19 +401,22 @@ __global__ void kernGenerateGbuffer(
 		}
 		if (mtl.type == MTL_TYPE_GLASS) p.type = PIXEL_TYPE_GLOSSY;
 
-		if (p.type == PIXEL_TYPE_SPECULAR) {
-			currentAlbedoBuf[pixel * 3] = albedo.x;
-			currentAlbedoBuf[pixel * 3 + 1] = albedo.y;
-			currentAlbedoBuf[pixel * 3 + 2] = albedo.z;
-			if (currentSpp == 1.f)currentDepthBuf[pixel] = depth;
-		}
-		else if (p.type == PIXEL_TYPE_GLOSSY) {
-			currentAlbedoBuf[pixel * 3] = albedo.x;
-			currentAlbedoBuf[pixel * 3 + 1] = albedo.y;
-			currentAlbedoBuf[pixel * 3 + 2] = albedo.z;
-			//currentDepthBuf[pixel] = depth;
+		// always record depth
+		currentDepthBuf[pixel] = depth;
 
-			currentDepthBuf[pixel] = depth;
+		if (p.type == PIXEL_TYPE_SPECULAR) { // nothing terminate
+			currentAlbedoBuf[pixel * 3] = albedo.x;
+			currentAlbedoBuf[pixel * 3 + 1] = albedo.y;
+			currentAlbedoBuf[pixel * 3 + 2] = albedo.z;
+			// store normal in case reach max gbuffer bounce
+			currentNormalBuf[pixel * 3] = normal.x;
+			currentNormalBuf[pixel * 3 + 1] = normal.y;
+			currentNormalBuf[pixel * 3 + 2] = normal.z;
+		}
+		else if (p.type == PIXEL_TYPE_GLOSSY) { // depth and normal terminate, prepare to blend second bounce albedo
+			currentAlbedoBuf[pixel * 3] = albedo.x;
+			currentAlbedoBuf[pixel * 3 + 1] = albedo.y;
+			currentAlbedoBuf[pixel * 3 + 2] = albedo.z;
 			depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
 
 			currentNormalBuf[pixel * 3] = normal.x;
@@ -424,13 +427,12 @@ __global__ void kernGenerateGbuffer(
 			normalBuf[pixel * 3 + 2] = (normalBuf[pixel * 3 + 2] * (currentSpp - 1.f) + normal.z) / currentSpp;
 		}
 		else {
-			p.type == PIXEL_TYPE_DIFFUSE;
+			p.type == PIXEL_TYPE_DIFFUSE; // all terminate
 			p.gbufferStored = true;
 			albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + albedo.x) / currentSpp;
 			albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + albedo.y) / currentSpp;
 			albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + albedo.z) / currentSpp;
 
-			currentDepthBuf[pixel] = depth;
 			depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + depth) / currentSpp;
 
 			currentNormalBuf[pixel * 3] = normal.x;
@@ -445,38 +447,14 @@ __global__ void kernGenerateGbuffer(
 	}
 
 	else {
-		if (p.type == PIXEL_TYPE_GLOSSY) {
-			bool hitDiffuse{ false };
-
-			if (mtl.type == MTL_TYPE_LAMBERT || mtl.type == MTL_TYPE_LIGHT_SOURCE) {
-				hitDiffuse = true;
-				rayPool[idx] = p;
-			}
-			if (mtl.type == MTL_TYPE_MICROFACET) {
-				if (!hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS) && mtl.roughness > 0.1f) {
-					hitDiffuse = true;
-					rayPool[idx] = p;
-				}
-				else if (hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS)) {
-					if (tex2D<float>(mtl.roughnessTex.devTexture, intersect.uv.x, intersect.uv.y) > 0.1f) {
-						hitDiffuse = true;
-						rayPool[idx] = p;
-					}
-				}
-			}
-
-			if (hitDiffuse || bounce == MAX_GBUFFER_BOUNCE) {
-				p.gbufferStored = true;
-				rayPool[idx] = p;
-				albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3] * albedo.x) / currentSpp;
-				albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 1] * albedo.y) / currentSpp;
-				albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 2] * albedo.z) / currentSpp;
-			}
-			else {
-				currentAlbedoBuf[pixel * 3] *= albedo.x;
-				currentAlbedoBuf[pixel * 3 + 1] *= albedo.y;
-				currentAlbedoBuf[pixel * 3 + 2] *= albedo.z;
-			}
+		float z = currentDepthBuf[idx] + depth;
+		currentDepthBuf[idx] += depth;
+		if (p.type == PIXEL_TYPE_GLOSSY && bounce == 2) { // blend second bounce albedo
+			p.gbufferStored = true;
+			rayPool[idx] = p;
+			albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3] * albedo.x) / currentSpp;
+			albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 1] * albedo.y) / currentSpp;
+			albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 2] * albedo.z) / currentSpp;
 		}
 		if (p.type == PIXEL_TYPE_SPECULAR) {
 			if (mtl.type != MTL_TYPE_SPECULAR || bounce == MAX_GBUFFER_BOUNCE) {
@@ -486,8 +464,7 @@ __global__ void kernGenerateGbuffer(
 				albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 1] * albedo.y) / currentSpp;
 				albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 2] * albedo.z) / currentSpp;
 
-				currentDepthBuf[pixel] += depth;
-				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + currentDepthBuf[pixel]) / currentSpp;
+				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + z) / currentSpp;
 
 				currentNormalBuf[pixel * 3] = normal.x;
 				currentNormalBuf[pixel * 3 + 1] = normal.y;
@@ -500,7 +477,6 @@ __global__ void kernGenerateGbuffer(
 				currentAlbedoBuf[pixel * 3] *= albedo.x;
 				currentAlbedoBuf[pixel * 3 + 1] *= albedo.y;
 				currentAlbedoBuf[pixel * 3 + 2] *= albedo.z;
-				currentDepthBuf[pixel] += depth;
 			}
 		}
 	}

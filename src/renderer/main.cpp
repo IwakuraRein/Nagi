@@ -44,13 +44,13 @@ int main(int argc, char* argv[]) {
 
 		auto frameBuf = pathTracer->getFrameBuffer();
 		saveHDR(scene.window, frameBuf.get(), 3, saveDir + "/nagi_result_");
-		savePNG(scene.window, frameBuf.get(), 3, scene.config.gamma, saveDir + "/nagi_result_");
+		savePNG(scene.window, frameBuf.get(), 3, scene.config.exposure, scene.config.gamma, saveDir + "/nagi_result_");
 
 		if (scene.config.denoiser) {
 			std::unique_ptr<Denoiser> denoiser = std::make_unique<Denoiser>(scene, *pathTracer);
 			auto denoisedFrameBuf = denoiser->denoise();
 			saveHDR(scene.window, denoisedFrameBuf.get(), 3, saveDir + "/nagi_result_denoised_");
-			savePNG(scene.window, denoisedFrameBuf.get(), 3, scene.config.gamma, saveDir + "/nagi_result_denoised_");
+			savePNG(scene.window, denoisedFrameBuf.get(), 3, scene.config.exposure, scene.config.gamma, saveDir + "/nagi_result_denoised_");
 			denoiser.reset(nullptr);
 		}
 

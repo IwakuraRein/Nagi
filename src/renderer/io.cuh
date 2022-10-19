@@ -52,10 +52,11 @@ inline void savePNG(
 }
 
 inline void savePNG(
-	const WindowSize& window, const float* buffer, int channels, const float gamma = 2.2, const std::string& filePath = "./nagi_result_", bool timestamp = true) {
+	const WindowSize& window, const float* buffer, int channels, const float exposure = 1.f, const float gamma = 2.2f, const std::string& filePath = "./nagi_result_", bool timestamp = true) {
 	std::unique_ptr<unsigned char[]> buf{ new unsigned char[window.pixels * channels] };
 	for (int i = 0; i < scene.window.pixels * channels; i++) {
-		buf[i] = glm::clamp((int)(powf(buffer[i], 1.f / gamma) * 255.f), 0, 255);
+		float color = glm::clamp(powf(buffer[i] * powf(2.f, exposure), 1.f / gamma), 0.f, 1.f);
+		buf[i] = glm::clamp((unsigned char)(color * 255.f), (unsigned char)0, (unsigned char)255);
 	}
 	savePNG(window, buf.get(), channels, filePath, timestamp);
 }

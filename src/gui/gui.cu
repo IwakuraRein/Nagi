@@ -3,7 +3,7 @@
 namespace nagi {
 
 GUI::GUI(const std::string& windowName, PathTracer& pathTracer):
-    pathTracer{ pathTracer }, scene{ pathTracer.scene }, wSize{ pathTracer.window }, gamma{ scene.config.gamma }, totalSpp{ scene.config.spp } {
+    pathTracer{ pathTracer }, scene{ pathTracer.scene }, wSize{ pathTracer.window }, gamma{ scene.config.gamma }, exposure{ scene.config.exposure }, totalSpp{ scene.config.spp } {
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit())
         throw std::runtime_error("Error: Failed to initialize GLFW.");
@@ -126,20 +126,25 @@ void GUI::render(float delta) {
 
             ImGui::Text("Time remaining: %f sec", avg * (totalSpp - step));
 
-            ImGui::Text("Present"); ImGui::SameLine();
+            ImGui::Text("Present "); ImGui::SameLine();
             static const char* items[] = { "Result", "Albedo", "Normal", "Depth"};
             ImGui::Combo("##Present", &present, items, 4);
 
+            if (present == 0 || present == 3) {
+                ImGui::Text("Exposure"); ImGui::SameLine();
+                ImGui::SliderFloat("##Exposure", &exposure, -5.f, 5.f);
+            }
             if (present != 2) {
-                ImGui::Text("Gamma  "); ImGui::SameLine();
-                ImGui::SliderFloat("##Gamma", &gamma, 0.0f, 5.0f);
+                ImGui::Text("Gamma   "); ImGui::SameLine();
+                ImGui::SliderFloat("##Gamma", &gamma, 0.f, 5.f);
             }
             if (present == 0) {
-                ImGui::Text("Denoise"); ImGui::SameLine();
+                ImGui::Text("Denoise "); ImGui::SameLine();
                 ImGui::Checkbox("##Denoise", &denoiser);
                 if (denoiser) {
 #ifdef DEB_INFO
-                    ImGui::Text("Denoising Time  %f ms", denoiseTime);
+                    ImGui::Text("Time Cost         %f ms", denoiseTime);
+                    ImGui::Text("Avg Time Cost     %f ms", denoiseTimeAvg);
 #endif // DEB_INFO
 
                     ImGui::Text("Normal Weight   "); ImGui::SameLine();
@@ -165,7 +170,7 @@ void GUI::render(float delta) {
 }
 
 
-__global__ void kernCopyResultToFrameBuffer(uchar4* pbo, WindowSize window,float gamma, float* buffer, float blend) {
+__global__ void kernCopyResultToFrameBuffer(uchar4* pbo, WindowSize window, float exposure, float gamma, float* buffer, float blend) {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= window.pixels) return;
 
@@ -173,11 +178,11 @@ __global__ void kernCopyResultToFrameBuffer(uchar4* pbo, WindowSize window,float
     int px = idx - py * window.width;
 
     int idx2 = (window.height - py - 1) * window.width + px;
-    //int idx2 = idx;
 
     glm::vec3 color{ buffer[idx * 3], buffer[idx * 3 + 1], buffer[idx * 3 + 2] };
-    color /= (1.f + color);
-    color = glm::pow(color, glm::vec3{ 1.f / gamma }) * 255.f * (1.f - blend);
+    color *= powf(2.0f, exposure);
+    color = glm::clamp(glm::pow(color, glm::vec3{ 1.f / gamma }), 0.f, 1.f);
+    color *= 255.f * (1.f - blend);
 
     color.x += pbo[idx2].x * blend;
     color.y += pbo[idx2].y * blend;
@@ -188,7 +193,7 @@ __global__ void kernCopyResultToFrameBuffer(uchar4* pbo, WindowSize window,float
     pbo[idx2].z = glm::clamp((unsigned char)color.z, (unsigned char)0, (unsigned char)255);
     pbo[idx2].w = 0;
 }
-__global__ void kernCopyAlbedoToFrameBuffer(uchar4* pbo, WindowSize window,float gamma, float* albedo) {
+__global__ void kernCopyAlbedoToFrameBuffer(uchar4* pbo, WindowSize window, float gamma, float* albedo) {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= window.pixels) return;
 
@@ -206,7 +211,7 @@ __global__ void kernCopyAlbedoToFrameBuffer(uchar4* pbo, WindowSize window,float
     pbo[idx2].z = glm::clamp((unsigned char)color.z, (unsigned char)0, (unsigned char)255);
     pbo[idx2].w = 0;
 }
-__global__ void kernCopyNormalToFrameBuffer(uchar4* pbo, WindowSize window,float* normal) {
+__global__ void kernCopyNormalToFrameBuffer(uchar4* pbo, WindowSize window, float* normal) {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= window.pixels) return;
 
@@ -225,7 +230,7 @@ __global__ void kernCopyNormalToFrameBuffer(uchar4* pbo, WindowSize window,float
     pbo[idx2].z = glm::clamp((unsigned char)color.z, (unsigned char)0, (unsigned char)255);
     pbo[idx2].w = 0;
 }
-__global__ void kernCopyDepthToFrameBuffer(uchar4* pbo, WindowSize window,float gamma, float* depth) {
+__global__ void kernCopyDepthToFrameBuffer(uchar4* pbo, WindowSize window, float exposure, float gamma, float* depth) {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx >= window.pixels) return;
 
@@ -235,7 +240,7 @@ __global__ void kernCopyDepthToFrameBuffer(uchar4* pbo, WindowSize window,float 
     int idx2 = (window.height - py - 1) * window.width + px;
     //int idx2 = idx;
 
-    float z = depth[idx] * 255.f;
+    float z = depth[idx] * 255.f * powf(2.f, exposure);
     z = glm::clamp(glm::pow(z, 1.f / gamma), 0.f, 255.f);
 
     pbo[idx2].x = (unsigned char)z;
@@ -254,26 +259,26 @@ void GUI::copyToFrameBuffer() {
     if (present == 0) { // result
         if (!denoiser) {
             isDenoised = false;
-            kernCopyResultToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, gamma, pathTracer.devFrameBuf, 0.f);
+            kernCopyResultToFrameBuffer<<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, exposure, gamma, pathTracer.devFrameBuf, 0.f);
         }
         else {
             denoise();
             float blend = isDenoised ? 0.5f : 0.f;
-            kernCopyResultToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, gamma, devDenoisedResult2, blend);
+            kernCopyResultToFrameBuffer<<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, exposure, gamma, devDenoisedResult2, blend);
             isDenoised = true;
         }
     }
     else if (present == 1) { // albedo
         isDenoised = false;
-        kernCopyAlbedoToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, gamma, pathTracer.devAlbedoBuf);
+        kernCopyAlbedoToFrameBuffer<<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, gamma, pathTracer.devAlbedoBuf);
     }
     else if (present == 2) { // normal
         isDenoised = false;
-        kernCopyNormalToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, pathTracer.devNormalBuf);
+        kernCopyNormalToFrameBuffer<<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, pathTracer.devNormalBuf);
     }
     else if (present == 3) { // depth
         isDenoised = false;
-        kernCopyDepthToFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, gamma, pathTracer.devDepthBuf);
+        kernCopyDepthToFrameBuffer<<<blocksPerGrid, BLOCK_SIZE>>>(devFrameBuffer, wSize, exposure, gamma, pathTracer.devDepthBuf);
     }
 
     cudaRun(cudaDeviceSynchronize());
@@ -340,8 +345,8 @@ __global__ void kernBilateralFilter(
         }
     }
 
-    variance /= (1.f + variance) * var_w;
-    variance = fmaxf(VAR_EPSILON, variance);
+    variance /= var_w;
+    variance = glm::clamp(variance, VAR_EPSILON, 1.f);
 
     //float thisL = luminance[idx];
     glm::vec3 thisL{ origin[idx * 3], origin[idx * 3+1], origin[idx * 3+2] };
@@ -401,6 +406,7 @@ void GUI::denoise() {
     }
     
 #ifdef DEB_INFO
+    static float counter{ 0.f };
     tik();
 #endif // DEB_INFO
 
@@ -423,6 +429,8 @@ void GUI::denoise() {
 	kernRetrieveColor<<<blocksPerGrid, BLOCK_SIZE>>>(wSize.pixels, devDenoisedResult2, devDenoisedResult1, pathTracer.devAlbedoBuf);
 #ifdef DEB_INFO
     denoiseTime = tok();
+    counter++;
+    denoiseTimeAvg = (denoiseTimeAvg * (counter-1.f) + denoiseTime) / counter;
 #endif // DEB_INFO
 }
 
