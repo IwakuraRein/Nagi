@@ -42,6 +42,12 @@ GUI::GUI(const std::string& windowName, PathTracer& pathTracer):
     glBufferData(GL_PIXEL_UNPACK_BUFFER, 4 * sizeof(GLubyte) * wSize.width * wSize.height, NULL, GL_DYNAMIC_DRAW);
 
     cudaRun(cudaGraphicsGLRegisterBuffer(&regesitered_pbo, pbo, cudaGraphicsRegisterFlagsWriteDiscard));
+
+#ifdef DEB_INFO
+    cudaRun(cudaEventCreate(&timer_start));
+    cudaRun(cudaEventCreate(&timer_end));
+#endif // DEB_INFO
+
 }
 void GUI::terminate() {
     if (window) {
@@ -71,6 +77,14 @@ void GUI::terminate() {
         cudaRun(cudaFree(devDenoisedResult2));
         devDenoisedResult2 = nullptr;
     }
+
+#ifdef DEB_INFO
+    if (timer_start)
+        cudaRun(cudaEventDestroy(timer_start));
+    if (timer_end)
+        cudaRun(cudaEventDestroy(timer_end));
+#endif // DEB_INFO
+
 }
 
 void GUI::render(float delta) {
@@ -101,15 +115,16 @@ void GUI::render(float delta) {
 		ImGui::NewFrame();
 
         {
+            ImGui::SetNextWindowBgAlpha(0.65f);
             ImGui::Begin("Preview Control Panel");
 
-            ImGui::Text("Step          : %d.", step);
+            ImGui::Text("Progress:       %d (%d%%)", step, (step * 100 / totalSpp));
             static std::list<float> stack;
             stack.push_back(delta);
             if (stack.size() > 10) stack.pop_front();
             float avg = listSum(stack) / stack.size();
 
-            ImGui::Text("Time remaining: %f sec.", avg * (totalSpp - step));
+            ImGui::Text("Time remaining: %f sec", avg * (totalSpp - step));
 
             ImGui::Text("Present"); ImGui::SameLine();
             static const char* items[] = { "Result", "Albedo", "Normal", "Depth"};
@@ -123,6 +138,10 @@ void GUI::render(float delta) {
                 ImGui::Text("Denoise"); ImGui::SameLine();
                 ImGui::Checkbox("##Denoise", &denoiser);
                 if (denoiser) {
+#ifdef DEB_INFO
+                    ImGui::Text("Denoising Time  %f ms", denoiseTime);
+#endif // DEB_INFO
+
                     ImGui::Text("Normal Weight   "); ImGui::SameLine();
                     ImGui::SliderFloat("##SigmaN", &sigmaN, 0.1f, 256.0f);
                     ImGui::Text("Depth Weight    "); ImGui::SameLine();
@@ -381,6 +400,10 @@ void GUI::denoise() {
         cudaRun(cudaMalloc((void**)&devDenoisedResult2, sizeof(float) * 3 * wSize.pixels));
     }
     
+#ifdef DEB_INFO
+    tik();
+#endif // DEB_INFO
+
     kernDiscardColor<<<blocksPerGrid, BLOCK_SIZE>>>(wSize.pixels, devDenoisedResult1, pathTracer.devFrameBuf, pathTracer.devAlbedoBuf);
     kernGetY<<<blocksPerGrid, BLOCK_SIZE>>>(wSize.pixels, devLuminance, devDenoisedResult1);
     
@@ -398,6 +421,9 @@ void GUI::denoise() {
 	std::swap(devDenoisedResult1, devDenoisedResult2);
 
 	kernRetrieveColor<<<blocksPerGrid, BLOCK_SIZE>>>(wSize.pixels, devDenoisedResult2, devDenoisedResult1, pathTracer.devAlbedoBuf);
+#ifdef DEB_INFO
+    denoiseTime = tok();
+#endif // DEB_INFO
 }
 
 

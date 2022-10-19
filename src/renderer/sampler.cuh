@@ -67,12 +67,12 @@ inline __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& norma
 	return glm::normalize(T * wo_tan.x + B * wo_tan.y + normal * wo_tan.z);
 }
 
-// pdf = 1
-inline __device__ __host__ glm::vec3 refractSampler(const float& ior, const glm::vec3& wi, glm::vec3 n, /*float& pdf,*/ thrust::default_random_engine& rng) {
+inline __device__ __host__ glm::vec3 refractSampler(const float& ior, const glm::vec3& wi, glm::vec3 n, float& pdf, thrust::default_random_engine& rng) {
 	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 	float rnd = u01(rng);
 	float invEta, iorI, iorT;
 	float cosI = glm::dot(wi, n);
+	pdf = 1.f;
 	if (cosI < 0) { // enter
 		cosI = -cosI;
 		n = -n;

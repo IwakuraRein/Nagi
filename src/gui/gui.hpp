@@ -92,6 +92,23 @@ public:
 	float* devLuminance{ nullptr };
 	float* devDenoisedResult1{ nullptr };
 	float* devDenoisedResult2{ nullptr };
+
+	cudaEvent_t timer_start{ nullptr }, timer_end{ nullptr };
+	bool timerStarted{ false };
+	void tik() {
+		cudaEventRecord(timer_start);
+		timerStarted = true;
+	}
+	float tok() {
+		if (!timerStarted) return 0.f;
+		cudaEventRecord(timer_end);
+		cudaEventSynchronize(timer_end);
+		float t;
+		cudaEventElapsedTime(&t, timer_start, timer_end);
+		timerStarted = false;
+		return t;
+	}
+	float denoiseTime;
 };
 
 }

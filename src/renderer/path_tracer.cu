@@ -10,144 +10,115 @@ PathTracer::PathTracer(Scene& Scene, BVH& BVH) :scene{ Scene }, window{ scene.wi
 	destroyBuffers();
 	allocateBuffers();
 
-	cudaMemcpy(devObjBuf, scene.objBuf.data(), scene.objBuf.size() * sizeof(Object), cudaMemcpyHostToDevice);
-	checkCUDAError("cudaMemcpy devObjBuf failed.");
-	cudaMemcpy(devMtlBuf, scene.mtlBuf.data(), scene.mtlBuf.size() * sizeof(Material), cudaMemcpyHostToDevice);
-	checkCUDAError("cudaMemcpy devMtlBuf failed.");
-	cudaMemcpy(devTrigBuf, scene.trigBuf.data(), scene.trigBuf.size() * sizeof(Triangle), cudaMemcpyHostToDevice);
-	checkCUDAError("cudaMemcpy devTrigBuf failed.");
+	cudaRun(cudaMemcpy(devObjBuf, scene.objBuf.data(), scene.objBuf.size() * sizeof(Object), cudaMemcpyHostToDevice));
+	cudaRun(cudaMemcpy(devMtlBuf, scene.mtlBuf.data(), scene.mtlBuf.size() * sizeof(Material), cudaMemcpyHostToDevice));
+	cudaRun(cudaMemcpy(devTrigBuf, scene.trigBuf.data(), scene.trigBuf.size() * sizeof(Triangle), cudaMemcpyHostToDevice));
 
 	// no need to clear frame buffer. kernWriteFrameBuffer() will do this when spp=1
 	//dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	//kernInitializeFrameBuffer<<<blocksPerGrid, BLOCK_SIZE>>>(window, devFrameBuf);
 	//checkCUDAError("kernInitializeFrameBuffer failed.");
 
-	cudaEventCreate(&timer_start);
-	cudaEventCreate(&timer_end);
+#ifdef DEB_INFO
+	cudaRun(cudaEventCreate(&timer_start));
+	cudaRun(cudaEventCreate(&timer_end));
+#endif // DEB_INFO
 }
 
 void PathTracer::allocateBuffers() {
-	cudaMalloc((void**)&devObjBuf, scene.objBuf.size() * sizeof(Object));
-	checkCUDAError("cudaMalloc devObjBuf failed.");
-	cudaMalloc((void**)&devMtlBuf, scene.mtlBuf.size() * sizeof(Material));
-	checkCUDAError("cudaMalloc devMtlBuf failed.");
-	cudaMalloc((void**)&devTrigBuf, scene.trigBuf.size() * sizeof(Triangle));
-	checkCUDAError("cudaMalloc devTrigBuf failed.");
-	cudaMalloc((void**)&devFrameBuf, sizeof(float) * window.pixels * 3);
-	checkCUDAError("cudaMalloc devFrameBuf failed.");
-	cudaMalloc((void**)&devNormalBuf, sizeof(float) * window.pixels * 3);
-	checkCUDAError("cudaMalloc devNormalBuf failed.");
-	cudaMalloc((void**)&devAlbedoBuf, sizeof(float) * window.pixels * 3);
-	checkCUDAError("cudaMalloc devAlbedoBuf failed.");
-	cudaMalloc((void**)&devDepthBuf, sizeof(float) * window.pixels);
-	checkCUDAError("cudaMalloc devDepthBuf failed.");
-	cudaMalloc((void**)&devCurrentNormalBuf, sizeof(float) * window.pixels * 3);
-	checkCUDAError("cudaMalloc devCurrentNormalBuf failed.");
-	cudaMalloc((void**)&devCurrentAlbedoBuf, sizeof(float) * window.pixels * 3);
-	checkCUDAError("cudaMalloc devCurrentAlbedoBuf failed.");
-	cudaMalloc((void**)&devCurrentDepthBuf, sizeof(float) * window.pixels);
-	checkCUDAError("cudaMalloc devCurrentDepthBuf failed.");
-	cudaMalloc((void**)&devVarianceBuf, sizeof(float) * window.pixels);
-	checkCUDAError("cudaMalloc devVarianceBuf failed.");
-	cudaMalloc((void**)&devRayPool1, window.pixels * sizeof(Path));
-	checkCUDAError("cudaMalloc devRayPool1 failed.");
-	cudaMalloc((void**)&devRayPool2, window.pixels * sizeof(Path));
-	checkCUDAError("cudaMalloc devRayPool2 failed.");
-	cudaMalloc((void**)&devTerminatedRays, window.pixels * sizeof(Path));
-	checkCUDAError("cudaMalloc devTerminatedRays failed.");
-	cudaMalloc((void**)&devResults1, window.pixels * sizeof(IntersectInfo));
-	checkCUDAError("cudaMalloc devResults1 failed.");
-	cudaMalloc((void**)&devResults2, window.pixels * sizeof(IntersectInfo));
-	checkCUDAError("cudaMalloc devResults2 failed.");
+	cudaRun(cudaMalloc((void**)&devObjBuf, scene.objBuf.size() * sizeof(Object)));
+	cudaRun(cudaMalloc((void**)&devMtlBuf, scene.mtlBuf.size() * sizeof(Material)));
+	cudaRun(cudaMalloc((void**)&devTrigBuf, scene.trigBuf.size() * sizeof(Triangle)));
+	cudaRun(cudaMalloc((void**)&devFrameBuf, sizeof(float) * window.pixels * 3));
+	cudaRun(cudaMalloc((void**)&devNormalBuf, sizeof(float) * window.pixels * 3));
+	cudaRun(cudaMalloc((void**)&devAlbedoBuf, sizeof(float) * window.pixels * 3));
+	cudaRun(cudaMalloc((void**)&devDepthBuf, sizeof(float) * window.pixels));
+	cudaRun(cudaMalloc((void**)&devCurrentNormalBuf, sizeof(float) * window.pixels * 3));
+	cudaRun(cudaMalloc((void**)&devCurrentAlbedoBuf, sizeof(float) * window.pixels * 3));
+	cudaRun(cudaMalloc((void**)&devCurrentDepthBuf, sizeof(float) * window.pixels));
+	cudaRun(cudaMalloc((void**)&devLumiance2Buf, sizeof(float) * window.pixels));
+	cudaRun(cudaMalloc((void**)&devRayPool1, window.pixels * sizeof(Path)));
+	cudaRun(cudaMalloc((void**)&devRayPool2, window.pixels * sizeof(Path)));
+	cudaRun(cudaMalloc((void**)&devTerminatedRays, window.pixels * sizeof(Path)));
+	cudaRun(cudaMalloc((void**)&devResults1, window.pixels * sizeof(IntersectInfo)));
+	cudaRun(cudaMalloc((void**)&devResults2, window.pixels * sizeof(IntersectInfo)));
 }
 
 void PathTracer::destroyBuffers() {
 	if (devObjBuf) {
-		cudaFree(devObjBuf);
-		checkCUDAError("cudaFree devObjBuf failed.");
+		cudaRun(cudaFree(devObjBuf));
 		devObjBuf = nullptr;
 	}
 	if (devMtlBuf) {
-		cudaFree(devMtlBuf);
-		checkCUDAError("cudaFree devMtlBuf failed.");
+		cudaRun(cudaFree(devMtlBuf));
 		devMtlBuf = nullptr;
 	}
 	if (devTrigBuf) {
-		cudaFree(devTrigBuf);
-		checkCUDAError("cudaFree devTrigBuf failed.");
+		cudaRun(cudaFree(devTrigBuf));
 		devTrigBuf = nullptr;
 	}
 	if (devRayPool1) {
-		cudaFree(devRayPool1);
-		checkCUDAError("cudaFree devRayPool1 failed.");
+		cudaRun(cudaFree(devRayPool1));
 		devRayPool1 = nullptr;
 	}
 	if (devRayPool2) {
-		cudaFree(devRayPool2);
-		checkCUDAError("cudaFree devRayPool2 failed.");
+		cudaRun(cudaFree(devRayPool2));
 		devRayPool2 = nullptr;
 	}
 	if (devTerminatedRays) {
-		cudaFree(devTerminatedRays);
-		checkCUDAError("cudaFree v failed.");
+		cudaRun(cudaFree(devTerminatedRays));
 		devTerminatedRays = nullptr;
 	}
 	if (devResults1) {
-		cudaFree(devResults1);
-		checkCUDAError("cudaFree devResults1 failed.");
+		cudaRun(cudaFree(devResults1));
 		devResults1 = nullptr;
 	}
 	if (devResults2) {
-		cudaFree(devResults2);
-		checkCUDAError("cudaFree devResults2 failed.");
+		cudaRun(cudaFree(devResults2));
 		devResults2 = nullptr;
 	}
 	if (devFrameBuf) {
-		cudaFree(devFrameBuf);
-		checkCUDAError("cudaFree devFrameBuf failed.");
+		cudaRun(cudaFree(devFrameBuf));
 		devFrameBuf = nullptr;
 	}
 	if (devNormalBuf) {
-		cudaFree(devNormalBuf);
-		checkCUDAError("cudaFree devNormalBuf failed.");
+		cudaRun(cudaFree(devNormalBuf));
 		devNormalBuf = nullptr;
 	}
 	if (devAlbedoBuf) {
-		cudaFree(devAlbedoBuf);
-		checkCUDAError("cudaFree devAlbedoBuf failed.");
+		cudaRun(cudaFree(devAlbedoBuf));
 		devAlbedoBuf = nullptr;
 	}
 	if (devDepthBuf) {
-		cudaFree(devDepthBuf);
-		checkCUDAError("cudaFree devDepthBuf failed.");
+		cudaRun(cudaFree(devDepthBuf));
 		devDepthBuf = nullptr;
 	}
 	if (devCurrentNormalBuf) {
-		cudaFree(devCurrentNormalBuf);
-		checkCUDAError("cudaFree devCurrentNormalBuf failed.");
+		cudaRun(cudaFree(devCurrentNormalBuf));
 		devCurrentNormalBuf = nullptr;
 	}
 	if (devCurrentAlbedoBuf) {
-		cudaFree(devCurrentAlbedoBuf);
-		checkCUDAError("cudaFree devCurrentAlbedoBuf failed.");
+		cudaRun(cudaFree(devCurrentAlbedoBuf));
 		devCurrentAlbedoBuf = nullptr;
 	}
 	if (devCurrentDepthBuf) {
-		cudaFree(devCurrentDepthBuf);
-		checkCUDAError("cudaFree devCurrentDepthBuf failed.");
+		cudaRun(cudaFree(devCurrentDepthBuf));
 		devCurrentDepthBuf = nullptr;
 	}
-	if (devVarianceBuf) {
-		cudaFree(devVarianceBuf);
-		checkCUDAError("cudaFree devVarianceBuf failed.");
-		devVarianceBuf = nullptr;
+	if (devLumiance2Buf) {
+		cudaRun(cudaFree(devLumiance2Buf));
+		devLumiance2Buf = nullptr;
 	}
 }
 
 PathTracer::~PathTracer() {
 	destroyBuffers();
-	cudaEventDestroy(timer_start);
-	cudaEventDestroy(timer_end);
+#ifdef DEB_INFO
+	if (timer_start)
+		cudaRun(cudaEventDestroy(timer_start));
+	if (timer_end)
+		cudaRun(cudaEventDestroy(timer_end));
+#endif // DEB_INFO
 }
 
 // intersection test -> compact rays -> sort rays according to material -> compute color -> compact rays -> intersection test...
@@ -163,7 +134,6 @@ void PathTracer::iterate() {
 
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
 	kernInitializeRays<<<blocksPerGrid, BLOCK_SIZE>>> (window, spp, devRayPool1, scene.config.maxBounce, scene.cam, spp != 1);
-	checkCUDAError("kernInitializeRays failed.");
 	int bounce = 0;
 	int remainingRays = window.pixels;
 	while (true) {
@@ -175,14 +145,18 @@ void PathTracer::iterate() {
 
 		//sortRays(remainingRays);
 
+#ifdef DEB_INFO
 		tik();
+#endif // DEB_INFO
 		if (bounce == 1 && scene.hasSkyBox) {
 			generateSkyboxAlbedo(window.pixels - remainingRays, spp);
 		}
 		if (bounce <= MAX_GBUFFER_BOUNCE) {
 			generateGbuffer(remainingRays, spp, bounce);
 		}
+#ifdef DEB_INFO
 		gbufferTime += tok();
+#endif // DEB_INFO
 
 		remainingRays = shade(remainingRays, spp, bounce);
 		//std::cout << remainingRays << std::endl;
@@ -201,7 +175,7 @@ void PathTracer::iterate() {
 	std::cout << "    Shading: " << shadingTime - lastShadingTime << " ms." << std::endl;
 	std::cout << "    Compaction : " << compactionTime - lastCompactionTime << " ms." << std::endl;
 	std::cout << "    Gbuffer generation : " << gbufferTime - lastGbufferTime << " ms." << std::endl;
-	std::cout << "  Iteration " << spp - 1 << " finished. Time cost: " << delta << " seconds."<< std::endl;
+	std::cout << "  Iteration " << spp - 1 << " finished. Time cost: " << delta << " seconds." << std::endl;
 	intersectionTime = 0.f;
 	compactionTime = 0.f;
 	shadingTime = 0.f;
@@ -336,17 +310,24 @@ __global__ void kernBVHIntersectTest(
 int PathTracer::intersectionTest(int rayNum) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
+#ifdef DEB_INFO
 	tik();
+#endif // DEB_INFO;
 	//kernTrigIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, 0, scene.trigBuf.size()-1, devTrigBuf, devResults1);
 	//kernObjIntersectTest <<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, scene.objBuf.size(), devObjBuf, devTrigBuf, devResults1);
 	kernBVHIntersectTest<<<blocksPerGrid, BLOCK_SIZE>>> (
 		rayNum, devRayPool1, bvh.tree.size(), bvh.devTree, devTrigBuf, devResults1);
+#ifdef DEB_INFO
 	intersectionTime += tok();
-	checkCUDAError("kernBVHIntersectTest failed.");
+#endif // DEB_INFO;
 
+#ifdef DEB_INFO
 	tik();
+#endif // DEB_INFO;
 	rayNum = compactRays(rayNum, devRayPool1, devRayPool2, devResults1, devResults2);
+#ifdef DEB_INFO
 	compactionTime += tok();
+#endif // DEB_INFO;
 
 	std::swap(devRayPool1, devRayPool2);
 	std::swap(devResults1, devResults2);
@@ -360,13 +341,11 @@ void PathTracer::sortRays(int rayNum) {
 	thrust::device_ptr<IntersectInfo> tResults{ devResults1 };
 
 	thrust::stable_sort_by_key(tResults, tResults + rayNum, tRays, IntersectionComp());
-	checkCUDAError("thrust::stable_sort_by_key failed.");
 	thrust::stable_sort(tResults, tResults + rayNum, IntersectionComp());
-	checkCUDAError("thrust::stable_sort failed.");
 }
 
 __global__ void kernGenerateGbuffer(
-	int rayNum, float currentSpp, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf, 
+	int rayNum, float currentSpp, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf,
 	float* currentAlbedoBuf, float* currentNormalBuf, float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
@@ -506,7 +485,7 @@ __global__ void kernGenerateGbuffer(
 				albedoBuf[pixel * 3] = (albedoBuf[pixel * 3] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3] * albedo.x) / currentSpp;
 				albedoBuf[pixel * 3 + 1] = (albedoBuf[pixel * 3 + 1] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 1] * albedo.y) / currentSpp;
 				albedoBuf[pixel * 3 + 2] = (albedoBuf[pixel * 3 + 2] * (currentSpp - 1.f) + currentAlbedoBuf[pixel * 3 + 2] * albedo.z) / currentSpp;
-				
+
 				currentDepthBuf[pixel] += depth;
 				depthBuf[pixel] = (depthBuf[pixel] * (currentSpp - 1.f) + currentDepthBuf[pixel]) / currentSpp;
 
@@ -533,7 +512,7 @@ void PathTracer::generateGbuffer(int rayNum, int spp, int bounce) {
 	//		rayNum, bounce, scene.cam.position, devRayPool1, devResults1, devMtlBuf, devNormalBuf, devDepthBuf);
 	//}
 	//kernGenerateAlbedo(rayNum, float(spp), bounce, devRayPool1, devResults1, devMtlBuf, devCurrentAlbedoBuf, devAlbedoBuf);
-	kernGenerateGbuffer<<<blocksPerGrid, BLOCK_SIZE>>>(
+	kernGenerateGbuffer<<<blocksPerGrid, BLOCK_SIZE>>> (
 		rayNum, (float)spp, bounce, scene.cam.position, devRayPool1, devResults1, devMtlBuf, devCurrentAlbedoBuf, devCurrentNormalBuf, devCurrentDepthBuf, devAlbedoBuf, devNormalBuf, devDepthBuf);
 }
 
@@ -698,8 +677,9 @@ __global__ void kernShadeGlass(int rayNum, int spp, int bounce, Path* rayPool, I
 		}
 		else albedo = mtl.albedo;
 
-		wo = refractSampler(mtl.ior, p.ray.dir, normal, rng);
-		p.color = p.color * albedo;
+		float pdf;
+		wo = refractSampler(mtl.ior, p.ray.dir, normal, pdf, rng);
+		p.color = p.color * albedo / pdf;
 		p.ray.origin += wo * REFRACT_OFFSET;
 		p.ray.dir = wo;
 		p.ray.invDir = 1.f / wo;
@@ -775,28 +755,34 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, int bounce, Path* rayPo
 int PathTracer::shade(int rayNum, int spp, int bounce) {
 	dim3 blocksPerGrid((rayNum + BLOCK_SIZE - 1) / BLOCK_SIZE);
 
+#ifdef DEB_INFO
 	tik();
+#endif // DEB_INFO;
 	if (hasMaterial(scene, MTL_TYPE_LIGHT_SOURCE))
-		kernShadeLightSource<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, devRayPool1, devResults1, devMtlBuf);
+		kernShadeLightSource<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, devRayPool1, devResults1, devMtlBuf);
 
 	if (hasMaterial(scene, MTL_TYPE_LAMBERT))
-		kernShadeLambert<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
+		kernShadeLambert<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 
 	if (hasMaterial(scene, MTL_TYPE_SPECULAR))
-		kernShadeSpecular<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
+		kernShadeSpecular<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 
 	if (hasMaterial(scene, MTL_TYPE_GLASS))
-		kernShadeGlass<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
+		kernShadeGlass<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 
 	if (hasMaterial(scene, MTL_TYPE_MICROFACET))
-		kernShadeMicrofacet<<<blocksPerGrid, BLOCK_SIZE>>>(rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
+		kernShadeMicrofacet<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
+#ifdef DEB_INFO
 	shadingTime += tok();
+#endif // DEB_INFO;
 
-	checkCUDAError("kernShading failed.");
-
+#ifdef DEB_INFO
 	tik();
+#endif // DEB_INFO;
 	rayNum = compactRays(rayNum, devRayPool1, devRayPool2);
+#ifdef DEB_INFO
 	compactionTime += tok();
+#endif // DEB_INFO;
 
 	std::swap(devRayPool1, devRayPool2);
 	return rayNum;
@@ -811,11 +797,8 @@ int PathTracer::compactRays(int rayNum, Path* rayPool, Path* compactedRayPool, I
 	thrust::device_ptr<IntersectInfo> tResultOut{ compactedIntersectResults };
 
 	thrust::device_ptr<Path> tmp = thrust::copy_if(tRaysIn, tRaysIn + rayNum, tRaysOut, ifHit());
-	checkCUDAError("thrust::copy_if failed.");
 	thrust::copy_if(tRaysIn, tRaysIn + rayNum, tTerminated + terminatedRayNum, ifNotHit());
-	checkCUDAError("thrust::copy_if failed.");
 	thrust::copy_if(tResultIn, tResultIn + rayNum, tRaysIn, tResultOut, ifHit());
-	checkCUDAError("thrust::copy_if failed.");
 
 	int remaining = tmp - tRaysOut;
 	terminatedRayNum += (rayNum - remaining);
@@ -830,7 +813,6 @@ int PathTracer::compactRays(int rayNum, Path* rayPool, Path* compactedRayPool) {
 
 	thrust::device_ptr<Path> tmp = thrust::copy_if(tRaysIn, tRaysIn + rayNum, tRaysOut, ifNotTerminated());
 	thrust::copy_if(tRaysIn, tRaysIn + rayNum, tTerminated + terminatedRayNum, ifTerminated());
-	checkCUDAError("thrust::copy_if failed.");
 
 	int remaining = tmp - tRaysOut;
 	terminatedRayNum += (rayNum - remaining);
@@ -868,7 +850,7 @@ __global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, in
 	glm::vec3 offset = -cam.upDir * r * glm::cos(theta);
 	offset += cam.rightDir * r * glm::sin(theta);
 
-	path.ray.dir = glm::normalize(lookAt - cam.position - offset* CAMERA_MULTIPLIER);
+	path.ray.dir = glm::normalize(lookAt - cam.position - offset * CAMERA_MULTIPLIER);
 	path.ray.invDir = 1.f / path.ray.dir;
 	path.ray.origin = cam.position + offset;
 	path.lastHit = 1;
@@ -884,25 +866,35 @@ __global__ void kernInitializeFrameBuffer(WindowSize window, float* frame) {
 	frame[idx * 3 + 2] = 0.f;
 }
 
-__global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* rayPool, float* frameBuffer) {
+__global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* rayPool, float* albedoBuffer, float* frameBuffer, float* luminanceBuffer) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= window.pixels) return;
 
 	Path path = rayPool[idx];
+	glm::vec3 color{ frameBuffer[path.pixelIdx * 3], frameBuffer[path.pixelIdx * 3 + 1], frameBuffer[path.pixelIdx * 3 + 2] };
+	glm::vec3 albedo{ albedoBuffer[path.pixelIdx * 3], albedoBuffer[path.pixelIdx * 3 + 1], albedoBuffer[path.pixelIdx * 3 + 2] };
+	float Y2{ luminanceBuffer[path.pixelIdx] };
 	if (path.lastHit < 0) { // ray didn't hit anything, or didn't hit light source in the end
 		path.color = glm::vec3{ 0.f };
 	}
 	path.color = isinf(path.color.x) || isnan(path.color.x) ||
-		isinf(path.color.y) || isnan(path.color.y) || 
+		isinf(path.color.y) || isnan(path.color.y) ||
 		isinf(path.color.z) || isnan(path.color.z) ? glm::vec3{ 0.f } : path.color;
-	frameBuffer[path.pixelIdx * 3] = (frameBuffer[path.pixelIdx * 3] * (currentSpp - 1.f) + path.color.x) / currentSpp;
-	frameBuffer[path.pixelIdx * 3+1] = (frameBuffer[path.pixelIdx * 3+1] * (currentSpp - 1.f) + path.color.y) / currentSpp;
-	frameBuffer[path.pixelIdx * 3+2] = (frameBuffer[path.pixelIdx * 3+2] * (currentSpp - 1.f) + path.color.z) / currentSpp;
+
+	color = (color * (currentSpp - 1.f) + path.color) / currentSpp;
+	glm::vec3 luminance = color / (albedo + FLT_EPSILON);
+	float Y = 0.299f * luminance.x + 0.587f * luminance.y + 0.114f * luminance.z;
+	Y2 = (Y2 * (currentSpp - 1.f) + Y * Y) / currentSpp;
+
+	frameBuffer[path.pixelIdx * 3] = color.x;
+	frameBuffer[path.pixelIdx * 3 + 1] = color.y;
+	frameBuffer[path.pixelIdx * 3 + 2] = color.z;
+	luminanceBuffer[path.pixelIdx] = Y2;
 }
 
 void PathTracer::writeFrameBuffer(int spp) {
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernWriteFrameBuffer <<<blocksPerGrid, BLOCK_SIZE>>> (window, (float)spp, devTerminatedRays, devFrameBuf);
+	kernWriteFrameBuffer<<<blocksPerGrid, BLOCK_SIZE>>> (window, (float)spp, devTerminatedRays, devAlbedoBuf, devFrameBuf, devLumiance2Buf);
 
 }
 
@@ -932,7 +924,7 @@ __global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm:
 
 void PathTracer::shadeWithSkybox() {
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernShadeWithSkybox <<<blocksPerGrid, BLOCK_SIZE>>> (
+	kernShadeWithSkybox<<<blocksPerGrid, BLOCK_SIZE>>> (
 		window.pixels, scene.skybox.devTexture, { 0.f, 0.f, 0.f }, scene.cam.upDir, { 1.f, 0.f, 0.f }, devTerminatedRays);
 }
 
@@ -950,20 +942,20 @@ __global__ void kernGenerateSkyboxAlbedo(
 		float4 texColor = tex2D<float4>(skybox, u, v);
 		glm::vec3 albedo = glm::vec3{ texColor.x, texColor.y, texColor.z };
 		albedoBuf[p.pixelIdx * 3] = (albedoBuf[p.pixelIdx * 3] * (currentSpp - 1.f) + albedo.x) / currentSpp;
-		albedoBuf[p.pixelIdx * 3+1] = (albedoBuf[p.pixelIdx * 3 + 1] * (currentSpp - 1.f) + albedo.y) / currentSpp;
+		albedoBuf[p.pixelIdx * 3 + 1] = (albedoBuf[p.pixelIdx * 3 + 1] * (currentSpp - 1.f) + albedo.y) / currentSpp;
 		albedoBuf[p.pixelIdx * 3 + 2] = (albedoBuf[p.pixelIdx * 3 + 2] * (currentSpp - 1.f) + albedo.z) / currentSpp;
 	}
 }
 void PathTracer::generateSkyboxAlbedo(int rayNum, int spp) {
 	dim3 blocksPerGrid((window.pixels + BLOCK_SIZE - 1) / BLOCK_SIZE);
-	kernGenerateSkyboxAlbedo<<<blocksPerGrid, BLOCK_SIZE>>>(
+	kernGenerateSkyboxAlbedo<<<blocksPerGrid, BLOCK_SIZE>>> (
 		window.pixels, (float)spp, scene.skybox.devTexture, { 0.f, 0.f, 0.f }, scene.cam.upDir, { 1.f, 0.f, 0.f }, devTerminatedRays, devAlbedoBuf);
 }
 
 std::unique_ptr<float[]> PathTracer::getFrameBuffer() {
 	if (devFrameBuf) {
 		std::unique_ptr<float[]> ptr{ new float[window.pixels * 3] };
-		cudaMemcpy(ptr.get(), devFrameBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaRun(cudaMemcpy(ptr.get(), devFrameBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost));
 		return ptr;
 	}
 	else {
@@ -972,7 +964,7 @@ std::unique_ptr<float[]> PathTracer::getFrameBuffer() {
 }
 void PathTracer::copyFrameBuffer(float* frameBuffer) {
 	if (devFrameBuf) {
-		cudaMemcpy(frameBuffer, devFrameBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaRun(cudaMemcpy(frameBuffer, devFrameBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost));
 	}
 	else {
 		throw std::runtime_error("Error: Frame buffer isn't allocated yet.");
@@ -981,7 +973,7 @@ void PathTracer::copyFrameBuffer(float* frameBuffer) {
 std::unique_ptr<float[]> PathTracer::getNormalBuffer() {
 	if (devNormalBuf) {
 		std::unique_ptr<float[]> ptr{ new float[window.pixels * 3] };
-		cudaMemcpy(ptr.get(), devNormalBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaRun(cudaMemcpy(ptr.get(), devNormalBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost));
 		return ptr;
 	}
 	else {
@@ -991,7 +983,7 @@ std::unique_ptr<float[]> PathTracer::getNormalBuffer() {
 std::unique_ptr<float[]> PathTracer::getAlbedoBuffer() {
 	if (devAlbedoBuf) {
 		std::unique_ptr<float[]> ptr{ new float[window.pixels * 3] };
-		cudaMemcpy(ptr.get(), devAlbedoBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaRun(cudaMemcpy(ptr.get(), devAlbedoBuf, window.pixels * 3 * sizeof(float), cudaMemcpyDeviceToHost));
 		return ptr;
 	}
 	else {
@@ -1001,7 +993,7 @@ std::unique_ptr<float[]> PathTracer::getAlbedoBuffer() {
 std::unique_ptr<float[]> PathTracer::getDepthBuffer() {
 	if (devDepthBuf) {
 		std::unique_ptr<float[]> ptr{ new float[window.pixels] };
-		cudaMemcpy(ptr.get(), devDepthBuf, window.pixels * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaRun(cudaMemcpy(ptr.get(), devDepthBuf, window.pixels * sizeof(float), cudaMemcpyDeviceToHost));
 		return ptr;
 	}
 	else {
