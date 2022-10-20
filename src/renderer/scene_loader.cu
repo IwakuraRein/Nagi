@@ -16,7 +16,7 @@ void updateTrigBoundingBox(Triangle& trig) {
 nagi::SceneLoader::~SceneLoader() {
 	// destroy all textures
 	for (auto& mtl : scene.mtlBuf) {
-		if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+		if (hasBit(mtl.textures, TEXTURE_TYPE_BASE)) {
 			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.baseTex.devArray) == destroyedArrays.end()) {
 				cudaFreeArray(mtl.baseTex.devArray);
 				destroyedArrays.push_back(mtl.baseTex.devArray);
@@ -26,7 +26,7 @@ nagi::SceneLoader::~SceneLoader() {
 				destroyedTextures.push_back(mtl.baseTex.devTexture);
 			}
 		}
-		if (hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS)) {
+		if (hasBit(mtl.textures, TEXTURE_TYPE_ROUGHNESS)) {
 			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.roughnessTex.devArray) == destroyedArrays.end()) {
 				cudaFreeArray(mtl.roughnessTex.devArray);
 				destroyedArrays.push_back(mtl.roughnessTex.devArray);
@@ -36,7 +36,7 @@ nagi::SceneLoader::~SceneLoader() {
 				destroyedTextures.push_back(mtl.roughnessTex.devTexture);
 			}
 		}
-		if (hasTexture(mtl, TEXTURE_TYPE_METALLIC)) {
+		if (hasBit(mtl.textures, TEXTURE_TYPE_METALLIC)) {
 			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.metallicTex.devArray) == destroyedArrays.end()) {
 				cudaFreeArray(mtl.metallicTex.devArray);
 				destroyedArrays.push_back(mtl.metallicTex.devArray);
@@ -46,7 +46,7 @@ nagi::SceneLoader::~SceneLoader() {
 				destroyedTextures.push_back(mtl.metallicTex.devTexture);
 			}
 		}
-		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+		if (hasBit(mtl.textures, TEXTURE_TYPE_NORMAL)) {
 			if (find(destroyedArrays.begin(), destroyedArrays.end(), mtl.normalTex.devArray) == destroyedArrays.end()) {
 				cudaFreeArray(mtl.normalTex.devArray);
 				destroyedArrays.push_back(mtl.normalTex.devArray);
@@ -149,23 +149,23 @@ void SceneLoader::loadMaterials() {
 			if (hasItem(items, "type")) {
 				std::string type = items["type"];
 				if (type == "Lambert") {
-					addMaterialType(scene, MTL_TYPE_LAMBERT);
+					addBit(scene.mtlTypes, MTL_TYPE_LAMBERT);
 					mtl.type = MTL_TYPE_LAMBERT;
 				}
 				else if (type == "Microfacet") {
-					addMaterialType(scene, MTL_TYPE_MICROFACET);
+					addBit(scene.mtlTypes, MTL_TYPE_MICROFACET);
 					mtl.type = MTL_TYPE_MICROFACET;
 				}
 				else if (type == "Glass") {
-					addMaterialType(scene, MTL_TYPE_GLASS);
+					addBit(scene.mtlTypes, MTL_TYPE_GLASS);
 					mtl.type = MTL_TYPE_GLASS;
 				}
 				else if (type == "Light Source") {
-					addMaterialType(scene, MTL_TYPE_LIGHT_SOURCE);
+					addBit(scene.mtlTypes, MTL_TYPE_LIGHT_SOURCE);
 					mtl.type = MTL_TYPE_LIGHT_SOURCE;
 				}
 				else if (type == "Specular") {
-					addMaterialType(scene, MTL_TYPE_SPECULAR);
+					addBit(scene.mtlTypes, MTL_TYPE_SPECULAR);
 					mtl.type = MTL_TYPE_SPECULAR;
 				}
 				else throw std::runtime_error("Error: Unknown material type.");
@@ -196,7 +196,7 @@ void SceneLoader::loadMaterials() {
 						stbi_ldr_to_hdr_gamma(1.f);
 				}
 				mtl.baseTex = textures[texName];
-				addTextureType(mtl, TEXTURE_TYPE_BASE);
+				addBit(mtl.textures, TEXTURE_TYPE_BASE);
 			}
 			else {
 				if (hasItem(items, "albedo")) {
@@ -221,11 +221,11 @@ void SceneLoader::loadMaterials() {
 				}
 
 				mtl.roughnessTex = textures[texName];
-				addTextureType(mtl, TEXTURE_TYPE_ROUGHNESS);
+				addBit(mtl.textures, TEXTURE_TYPE_ROUGHNESS);
 			}
 			else {
 				if (hasItem(items, "roughness")) {
-					mtl.roughness = glm::clamp((float)items["roughness"], 0.05f, 1.f);
+					mtl.roughness = items["roughness"];
 				}
 			}
 
@@ -245,7 +245,7 @@ void SceneLoader::loadMaterials() {
 				}
 
 				mtl.metallicTex = textures[texName];
-				addTextureType(mtl, TEXTURE_TYPE_METALLIC);
+				addBit(mtl.textures, TEXTURE_TYPE_METALLIC);
 			}
 			else {
 				if (hasItem(items, "metallic")) {
@@ -269,7 +269,7 @@ void SceneLoader::loadMaterials() {
 				}
 
 				mtl.normalTex = textures[texName];
-				addTextureType(mtl, TEXTURE_TYPE_NORMAL);
+				addBit(mtl.textures, TEXTURE_TYPE_NORMAL);
 			}
 
 			if (hasItem(items, "ior")) {
@@ -311,7 +311,7 @@ void SceneLoader::loadObjects() {
 				transform.scale = glm::vec3{ scale[0], scale[1], scale[2] };
 			}
 
-			updateTransformMat(&transform);
+			updateTransformMat(transform);
 
 			if (hasItem(items, "material")) {
 				if (hasItem(mtlIndices, items["material"]))

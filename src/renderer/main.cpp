@@ -23,6 +23,7 @@ int main(int argc, char* argv[]) {
 		strRightStrip(saveDir, "\\");
 	}
 	try {
+		Scene scene{};
 		std::unique_ptr<SceneLoader> sceneLoader = std::make_unique<SceneLoader>(scene, argv[1]);
 		sceneLoader->load();
 		std::unique_ptr<BVH> bvh = std::make_unique<BVH>(scene);

@@ -6,21 +6,14 @@
 #include "bvh.cuh"
 #include "sampler.cuh"
 #include "bsdf.cuh"
+#include "material.cuh"
 
-#define PDF_EPSILON 0.0001f
 #define MAX_GBUFFER_BOUNCE 8
 #define REFLECT_OFFSET 0.0002f
 #define REFRACT_OFFSET 0.001f
 
 namespace nagi {
 
-struct IntersectInfo {
-	glm::vec3 normal;
-	glm::vec3 tangent;
-	glm::vec2 uv;
-	glm::vec3 position;
-	int mtlIdx;
-};
 struct ifHit {
 	__host__ __device__ bool operator()(const Path& x) {
 		return x.lastHit >= 0;

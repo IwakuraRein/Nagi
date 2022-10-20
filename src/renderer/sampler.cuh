@@ -2,55 +2,14 @@
 #define SAMPLER_CUH
 
 #include "common.cuh"
+#include "material.cuh"
 
 #include <thrust/random.h>
 
-#define INV_SQRT_THREE 0.577350269189625764509148780501957456f
-
 namespace nagi {
 
-inline __device__ __host__ glm::vec3 getDifferentDir(const glm::vec3& dir) {
-	// Find a direction that is not the dir based of whether or not the
-	// dir's components are all equal to sqrt(1/3) or whether or not at
-	// least one component is less than sqrt(1/3). Learned this trick from
-	// Peter Kutz.
-
-	glm::vec3 T;
-	if (fabsf(dir.x) < INV_SQRT_THREE) {
-		T = glm::vec3(1, 0, 0);
-	}
-	else if (fabsf(dir.y) < INV_SQRT_THREE) {
-		T = glm::vec3(0, 1, 0);
-	}
-	else {
-		T = glm::vec3(0, 0, 1);
-	}
-	return T;
-}
-
-inline __device__ __host__
-thrust::default_random_engine makeSeededRandomEngine(const int& iter, const int& index, const int& depth) {
-	int h = hash((1 << 31) | (depth << 22) | iter) ^ hash(index);
-	return thrust::default_random_engine(h);
-}
-
-inline __device__ __host__
-thrust::default_random_engine makeSeededRandomEngine(const int& seed) {
-	return thrust::default_random_engine(hash(seed));
-}
-
-inline __device__ __host__ float fresnel(const float& cosI, const float& cosT, const float& iorI, const float& iorT) {
-	float ti = iorT * cosI;
-	float it = iorI * cosT;
-	float tt = iorT * cosT;
-	float ii = iorI * cosI;
-	float r1 = (ti - it) / (ti + it);
-	float r2 = (ii - tt) / (ii + tt);
-	return 0.5f * (r1 * r1 + r2 * r2);
-}
-
-inline __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& normal, float& pdf, thrust::default_random_engine& rng) {
-	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
+inline __device__ glm::vec3 cosHemisphereSampler(const glm::vec3& normal, float& pdf, thrust::default_random_engine& rng) {
+	thrust::uniform_real_distribution<float> u01(0.f, 1.f);
 	float rnd = u01(rng);
 	float phi = rnd * TWO_PI;
 	rnd = u01(rng);
@@ -67,8 +26,8 @@ inline __device__ __host__ glm::vec3 cosHemisphereSampler(const glm::vec3& norma
 	return glm::normalize(T * wo_tan.x + B * wo_tan.y + normal * wo_tan.z);
 }
 
-inline __device__ __host__ glm::vec3 refractSampler(const float& ior, const glm::vec3& wi, glm::vec3 n, float& pdf, thrust::default_random_engine& rng) {
-	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
+inline __device__ glm::vec3 refractSampler(const float& ior, const glm::vec3& wi, glm::vec3 n, float& pdf, thrust::default_random_engine& rng) {
+	thrust::uniform_real_distribution<float> u01(0.f, 1.f);
 	float rnd = u01(rng);
 	float invEta, iorI, iorT;
 	float cosI = glm::dot(wi, n);
@@ -102,7 +61,7 @@ inline __device__ __host__ glm::vec3 refractSampler(const float& ior, const glm:
 	}
 }
 
-inline __device__ __host__ glm::vec3 reflectSampler(
+inline __device__ glm::vec3 reflectSampler(
 	const float& metallic, const glm::vec3& albedo, const glm::vec3& wi, const glm::vec3& n, float& pdf, thrust::default_random_engine& rng) {
 	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 	float rnd = u01(rng);
@@ -124,7 +83,7 @@ inline __device__ __host__ glm::vec3 reflectSampler(
 }
 
 // reference: https://agraphicsguy.wordpress.com/2015/11/01/sampling-microfacet-brdf/
-inline __device__ __host__ glm::vec3 ggxImportanceSampler(
+inline __device__ glm::vec3 ggxImportanceSampler(
 	const float& alpha, const float& metallic, const glm::vec3 & wi, const glm::vec3 & normal, float& pdf, thrust::default_random_engine& rng){
 	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 
@@ -171,7 +130,7 @@ inline __device__ __host__ glm::vec3 ggxImportanceSampler(
 	return wo;
 }
 
-inline __device__ __host__ glm::vec3 uniformHemisphereSampler(const glm::vec3 & normal, float& pdf, thrust::default_random_engine& rng) {
+inline __device__ glm::vec3 uniformHemisphereSampler(const glm::vec3 & normal, float& pdf, thrust::default_random_engine& rng) {
 	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 	float rnd = u01(rng);
 	float phi = rnd * TWO_PI;

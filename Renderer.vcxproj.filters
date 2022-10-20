@@ -9,6 +9,31 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\renderer\instantiate.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\renderer\main.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="src\renderer\bvh.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\denoiser.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\path_tracer.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\scene_loader.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\renderer\material.cu">
+      <Filter>Source</Filter>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
     <ClInclude Include="src\renderer\bsdf.cuh">
       <Filter>Header</Filter>
     </ClInclude>
@@ -27,6 +52,9 @@
     <ClInclude Include="src\renderer\io.cuh">
       <Filter>Header</Filter>
     </ClInclude>
+    <ClInclude Include="src\renderer\material.cuh">
+      <Filter>Header</Filter>
+    </ClInclude>
     <ClInclude Include="src\renderer\path_tracer.cuh">
       <Filter>Header</Filter>
     </ClInclude>
@@ -36,30 +64,5 @@
     <ClInclude Include="src\renderer\scene_loader.cuh">
       <Filter>Header</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="src\renderer\instantiate.cpp">
-      <Filter>Source</Filter>
-    </ClCompile>
-    <ClCompile Include="src\renderer\main.cpp">
-      <Filter>Source</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <CudaCompile Include="src\renderer\bvh.cu">
-      <Filter>Source</Filter>
-    </CudaCompile>
-    <CudaCompile Include="src\renderer\common.cu">
-      <Filter>Source</Filter>
-    </CudaCompile>
-    <CudaCompile Include="src\renderer\denoiser.cu">
-      <Filter>Source</Filter>
-    </CudaCompile>
-    <CudaCompile Include="src\renderer\path_tracer.cu">
-      <Filter>Source</Filter>
-    </CudaCompile>
-    <CudaCompile Include="src\renderer\scene_loader.cu">
-      <Filter>Source</Filter>
-    </CudaCompile>
   </ItemGroup>
 </Project>

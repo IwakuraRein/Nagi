@@ -359,7 +359,7 @@ __global__ void kernGenerateGbuffer(
 	glm::vec3 normal;
 	glm::vec3 albedo;
 	float depth = glm::length(intersect.position - p.ray.origin);
-	if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+	if (hasBit(mtl.textures, TEXTURE_TYPE_NORMAL)) {
 		glm::mat3 TBN = glm::mat3(intersect.tangent, glm::cross(intersect.normal, intersect.tangent), intersect.normal);
 		float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersect.uv.x, intersect.uv.y);
 		glm::vec3 bump{ texVal.x * 2.f - 1.f, texVal.y * 2.f - 1.f, 1.f };
@@ -371,7 +371,7 @@ __global__ void kernGenerateGbuffer(
 	if (mtl.type == MTL_TYPE_LIGHT_SOURCE) {
 		albedo = glm::vec3{ 1.f };
 	}
-	else if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+	else if (hasBit(mtl.textures, TEXTURE_TYPE_BASE)) {
 		float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersect.uv.x, intersect.uv.y);
 		albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
 	}
@@ -380,7 +380,7 @@ __global__ void kernGenerateGbuffer(
 	if (bounce == 1) {
 		if (mtl.type == MTL_TYPE_SPECULAR) {
 			float metallic;
-			if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+			if (hasBit(mtl.textures, TEXTURE_TYPE_BASE)) {
 				metallic = tex2D<float>(mtl.metallicTex.devTexture, intersect.uv.x, intersect.uv.y);
 			}
 			else metallic = mtl.metallic;
@@ -390,10 +390,10 @@ __global__ void kernGenerateGbuffer(
 				p.type = PIXEL_TYPE_GLOSSY;
 		}
 		if (mtl.type == MTL_TYPE_MICROFACET) {
-			if (!hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS) && mtl.roughness <= 0.1f) {
+			if (!hasBit(mtl.textures, TEXTURE_TYPE_ROUGHNESS) && mtl.roughness <= 0.1f) {
 				p.type = PIXEL_TYPE_GLOSSY;
 			}
-			else if (hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS)) {
+			else if (hasBit(mtl.textures, TEXTURE_TYPE_ROUGHNESS)) {
 				if (tex2D<float>(mtl.roughnessTex.devTexture, intersect.uv.x, intersect.uv.y) <= 0.1f) {
 					p.type = PIXEL_TYPE_GLOSSY;
 				}
@@ -508,41 +508,20 @@ __global__ void kernShadeLambert(int rayNum, int spp, int bounce, Path* rayPool,
 	if (p.remainingBounces == 0) {
 		p.color = glm::vec3{ 0.f };
 	}
-	else if (glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
-		p.color = glm::vec3{ 0.f };
-		p.remainingBounces = 0;
-	}
 	else {
 		auto rng = makeSeededRandomEngine(spp, idx, bounce);
-		glm::vec3 normal, albedo;
-		glm::vec3 wo, bsdf;
-		float pdf;
-		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
-			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
-			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
-			glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
-			bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
-			normal = glm::normalize(TBN * bump);
+		glm::vec3 wo, eval;
+		if (Lambert::eval(p.ray.dir, wo, eval, intersection, mtlBuf[intersection.mtlIdx], rng)) {
+			p.color *= eval; // lambert is timed inside the bsdf
+			p.ray.dir = wo;
+			p.ray.invDir = 1.f / wo;
+
+			p.remainingBounces--;
 		}
-		else normal = intersection.normal;
-		if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
-			float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
-			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
-		}
-		else albedo = mtl.albedo;
-		wo = cosHemisphereSampler(normal, pdf, rng);
-		if (pdf < PDF_EPSILON) {
-			//p.lastHit = -1;
+		else {
 			p.color = glm::vec3{ 0.f };
 			p.remainingBounces = 0;
 		}
-		else {
-			bsdf = lambertBrdf(p.ray.dir, wo, normal, albedo);
-			p.color = p.color * bsdf / pdf; // lambert is timed inside the bsdf
-			p.ray.dir = wo;
-			p.ray.invDir = 1.f / wo;
-		}
-		p.remainingBounces--;
 	}
 	rayPool[idx] = p;
 }
@@ -565,7 +544,7 @@ __global__ void kernShadeSpecular(int rayNum, int spp, int bounce, Path* rayPool
 		auto rng = makeSeededRandomEngine(spp, idx, bounce);
 		glm::vec3 normal, albedo;
 		float metallic;
-		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+		if (hasBit(mtl.textures, TEXTURE_TYPE_NORMAL)) {
 			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
 			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
 			glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
@@ -573,12 +552,12 @@ __global__ void kernShadeSpecular(int rayNum, int spp, int bounce, Path* rayPool
 			normal = glm::normalize(TBN * bump);
 		}
 		else normal = intersection.normal;
-		if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+		if (hasBit(mtl.textures, TEXTURE_TYPE_BASE)) {
 			float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
 			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
 		}
 		else albedo = mtl.albedo;
-		if (hasTexture(mtl, TEXTURE_TYPE_METALLIC)) {
+		if (hasBit(mtl.textures, TEXTURE_TYPE_METALLIC)) {
 			metallic = tex2D<float>(mtl.metallicTex.devTexture, intersection.uv.x, intersection.uv.y);
 		}
 		else metallic = mtl.metallic;
@@ -639,7 +618,7 @@ __global__ void kernShadeGlass(int rayNum, int spp, int bounce, Path* rayPool, I
 		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
 		glm::vec3 normal, albedo;
 		glm::vec3 wo;
-		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
+		if (hasBit(mtl.textures, TEXTURE_TYPE_NORMAL)) {
 			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
 			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
 			glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
@@ -647,7 +626,7 @@ __global__ void kernShadeGlass(int rayNum, int spp, int bounce, Path* rayPool, I
 			normal = glm::normalize(TBN * bump);
 		}
 		else normal = intersection.normal;
-		if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
+		if (hasBit(mtl.textures, TEXTURE_TYPE_BASE)) {
 			float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
 			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
 		}
@@ -678,52 +657,20 @@ __global__ void kernShadeMicrofacet(int rayNum, int spp, int bounce, Path* rayPo
 	if (p.remainingBounces == 0) {
 		p.color = glm::vec3{ 0.f };
 	}
-	else if (glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
-		p.color = glm::vec3{ 0.f };
-		p.remainingBounces = 0;
-	}
 	else {
 		auto rng = makeSeededRandomEngine(spp, idx, bounce);
-		glm::vec3 normal, albedo;
-		glm::vec3 wo, bsdf;
-		float pdf;
-		if (hasTexture(mtl, TEXTURE_TYPE_NORMAL)) {
-			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
-			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
-			glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
-			bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
-			normal = glm::normalize(TBN * bump);
-		}
-		else normal = intersection.normal;
-		if (hasTexture(mtl, TEXTURE_TYPE_BASE)) {
-			float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
-			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
-		}
-		else albedo = mtl.albedo;
-		float metallic, roughness;
-		if (hasTexture(mtl, TEXTURE_TYPE_METALLIC)) {
-			metallic = tex2D<float>(mtl.metallicTex.devTexture, intersection.uv.x, intersection.uv.y);
-		}
-		else metallic = mtl.metallic;
-		if (hasTexture(mtl, TEXTURE_TYPE_ROUGHNESS)) {
-			roughness = tex2D<float>(mtl.roughnessTex.devTexture, intersection.uv.x, intersection.uv.y);
-		}
-		else roughness = mtl.roughness;
+		glm::vec3 wo, eval;
+		if (Microfacet::eval(p.ray.dir, wo, eval, intersection, mtlBuf[intersection.mtlIdx], rng)) {
+			p.color *= eval; // lambert is timed inside the bsdf
+			p.ray.dir = wo;
+			p.ray.invDir = 1.f / wo;
 
-		wo = ggxImportanceSampler(roughness, metallic, p.ray.dir, normal, pdf, rng);
-
-		if (glm::dot(wo, normal) < 0.f || pdf < PDF_EPSILON) {
+			p.remainingBounces--;
+		}
+		else {
 			p.color = glm::vec3{ 0.f };
 			p.remainingBounces = 0;
 		}
-		else {
-			bsdf = microfacetBrdf(p.ray.dir, wo, normal, albedo, metallic, roughness);
-			p.color = p.color * bsdf / pdf; // lambert is timed inside the bsdf
-			p.ray.dir = wo;
-			p.ray.invDir = 1.f / wo;
-		}
-
-		p.remainingBounces--;
 	}
 	rayPool[idx] = p;
 }
@@ -734,19 +681,19 @@ int PathTracer::shade(int rayNum, int spp, int bounce) {
 #ifdef DEB_INFO
 	tik();
 #endif // DEB_INFO;
-	if (hasMaterial(scene, MTL_TYPE_LIGHT_SOURCE))
+	if (hasBit(scene.mtlTypes, MTL_TYPE_LIGHT_SOURCE))
 		kernShadeLightSource<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, devRayPool1, devResults1, devMtlBuf);
 
-	if (hasMaterial(scene, MTL_TYPE_LAMBERT))
+	if (hasBit(scene.mtlTypes, MTL_TYPE_LAMBERT))
 		kernShadeLambert<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 
-	if (hasMaterial(scene, MTL_TYPE_SPECULAR))
+	if (hasBit(scene.mtlTypes, MTL_TYPE_SPECULAR))
 		kernShadeSpecular<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 
-	if (hasMaterial(scene, MTL_TYPE_GLASS))
+	if (hasBit(scene.mtlTypes, MTL_TYPE_GLASS))
 		kernShadeGlass<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 
-	if (hasMaterial(scene, MTL_TYPE_MICROFACET))
+	if (hasBit(scene.mtlTypes, MTL_TYPE_MICROFACET))
 		kernShadeMicrofacet<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 #ifdef DEB_INFO
 	shadingTime += tok();

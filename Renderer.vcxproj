@@ -21,6 +21,8 @@
     <ClInclude Include="src\renderer\denoiser.cuh" />
     <ClInclude Include="src\renderer\intersection.cuh" />
     <ClInclude Include="src\renderer\io.cuh" />
+    <CudaCompile Include="src\renderer\material.cu" />
+    <ClInclude Include="src\renderer\material.cuh" />
     <ClInclude Include="src\renderer\path_tracer.cuh" />
     <ClInclude Include="src\renderer\sampler.cuh" />
     <ClInclude Include="src\renderer\scene_loader.cuh" />
@@ -31,7 +33,6 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\renderer\bvh.cu" />
-    <CudaCompile Include="src\renderer\common.cu" />
     <CudaCompile Include="src\renderer\denoiser.cu" />
     <CudaCompile Include="src\renderer\path_tracer.cu" />
     <CudaCompile Include="src\renderer\scene_loader.cu" />

@@ -68,6 +68,13 @@ inline __device__ __host__ float fmaxf(float X, float Y, float Z) {
 	return fmaxf(X, fmaxf(Y, Z));
 }
 
+inline __device__ __host__ bool hasBit(const unsigned int& bits, const unsigned int& bit) {
+	return (bits & (1 << bit)) != 0;
+}
+inline __device__ __host__ void addBit(unsigned int& bits, unsigned int bit) {
+	bits = (bits | (1 << bit));
+}
+
 #ifndef hasItem(X, Y)
 #define hasItem(X, Y) (X.find(Y) != X.end())
 #endif
@@ -116,7 +123,15 @@ inline void hashCombine(std::size_t& seed, const T& v, Rest... rest) {
 	hashCombine(seed, rest...);
 }
 
-bool doesFileExist(const std::string& name);
+inline bool doesFileExist(const std::string& name) {
+	if (FILE* file = fopen(name.c_str(), "r")) {
+		fclose(file);
+		return true;
+	}
+	else {
+		return false;
+	}
+}
 
 inline bool strEndWith(const std::string& str, const std::string& tail) {
 	return str.compare(str.size() - tail.size(), tail.size(), tail) == 0;
@@ -126,11 +141,42 @@ inline bool strStartWith(const std::string& str, const std::string& head) {
 	return str.compare(0, head.size(), head) == 0;
 }
 
-std::string getFileName(const std::string& str);
+inline std::string getFileName(const std::string& str) {
+	int i = str.size() - 1;
+	for (; i != 0; i--) {
+		if (str[i] == '/')
+			break;
+	}
+	if (str[i] == '/') i++;
+	return str.substr(i, str.size() - i);
+}
 
-std::string strLeftStrip(const std::string& str, const std::string& strip);
+inline std::string strLeftStrip(const std::string& str, const std::string& strip) {
+	if (strip.size() > str.size()) return str;
+	int i = 0;
+	for (; i < strip.size(); i++) {
+		if (strip[i] != str[i]) return str;
+	}
+	std::string out;
+	out.resize(str.size() - strip.size());
+	for (; i < str.size(); i++) {
+		out[i - strip.size()] = str[i];
+	}
+	return out;
+}
 
-std::string strRightStrip(const std::string& str, const std::string& strip);
+inline std::string strRightStrip(const std::string& str, const std::string& strip) {
+	if (strip.size() > str.size()) return str;
+	for (int i = 0; i < strip.size(); i++) {
+		if (strip[strip.size() - i] != str[str.size() - i]) return str;
+	}
+	std::string out;
+	out.resize(str.size() - strip.size());
+	for (int i = 0; i < out.size(); i++) {
+		out[i] = str[i];
+	}
+	return out;
+}
 
 // common data structures
 namespace nagi {
@@ -145,12 +191,71 @@ struct Transform {
 	glm::mat4 invNormalTransformMat;
 };
 
-__device__ __host__ glm::mat4 getTransformMat(
-	const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale);
-__device__ __host__ void updateTransformMat(Transform* t);
-__device__ __host__ glm::mat4 getRotationMat(const glm::vec3& rotation);
-__device__ __host__ void vecTransform(glm::vec3* vec, const glm::mat4& mat, float T = 1.f);
-__device__ __host__ void vecTransform2(glm::vec3* vec, const glm::mat4& mat, float T = 1.f);
+inline __device__ __host__ glm::mat4 getRotationMat(const glm::vec3& rotation) {
+	//const float c3 = glm::cos(glm::radians(rotation.z));
+	//const float s3 = glm::sin(glm::radians(rotation.z));
+	//const float c2 = glm::cos(glm::radians(rotation.x));
+	//const float s2 = glm::sin(glm::radians(rotation.x));
+	//const float c1 = glm::cos(glm::radians(rotation.y));
+	//const float s1 = glm::sin(glm::radians(rotation.y));
+
+	//return glm::mat4{
+	//	{
+	//		(c1 * c3 + s1 * s2 * s3),
+	//		(c2 * s3),
+	//		(c1 * s2 * s3 - c3 * s1),
+	//		0.f
+	//	},
+	//	{
+	//		(c3 * s1 * s2 - c1 * s3),
+	//		(c2 * c3),
+	//		(c1 * c3 * s2 + s1 * s3),
+	//		0.f
+	//	},
+	//	{
+	//		(c2 * s1),
+	//		(-s2),
+	//		(c1 * c2),
+	//		0.f
+	//	},
+	//	{ 0.f, 0.f, 0.f, 1.f }
+	//};
+
+	return glm::yawPitchRoll(rotation.y, rotation.x, rotation.z);
+}
+
+inline __device__ __host__ glm::mat4 getTransformMat(
+	const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale) {
+	glm::mat4 mat = getRotationMat(rotation);
+	mat[0] *= scale.x;
+	mat[1] *= scale.y;
+	mat[2] *= scale.z;
+	mat[3] = glm::vec4{ position.x, position.y, position.z, 1.f };
+	return mat;
+}
+inline __device__ __host__ void updateTransformMat(Transform& t) {
+	t.transformMat = getTransformMat(t.position, t.rotation, t.scale);
+	t.invTransformMat = glm::inverse(t.transformMat);
+	t.normalTransformMat = getTransformMat(t.position, t.rotation, 1.f / t.scale);
+	t.invNormalTransformMat = glm::inverse(t.normalTransformMat);
+}
+inline __device__ __host__ void vecTransform(glm::vec3* vec, const glm::mat4& mat, float T = 1.f) {
+	glm::vec4 tmp{ mat * glm::vec4{ *vec, T } };
+	if (glm::epsilonNotEqual(T, 0.f, FLT_EPSILON)) {
+		if (glm::epsilonNotEqual(tmp.w, 0.f, FLT_EPSILON)) {
+			vec->x = tmp.x / tmp.w;
+			vec->y = tmp.y / tmp.w;
+			vec->z = tmp.z / tmp.w;
+		}
+		else {
+			*vec = glm::vec3{ 0.f };
+		}
+	}
+	else *vec = tmp;
+}
+inline __device__ __host__ void vecTransform2(glm::vec3* vec, const glm::mat4& mat, float T = 1.f) {
+	*vec = mat * glm::vec4{ *vec, T };
+}
 
 struct Camera {
 	float near{ 0.01f };
@@ -270,18 +375,12 @@ struct Material {
 	Texture occlusionTex;
 	float ior{ 1.5f };
 };
-inline __device__ __host__ bool hasTexture(const Material& mtl, unsigned int type) {
-	return (mtl.textures & (1 << type)) != 0;
-}
-inline __device__ __host__ void addTextureType(Material& mtl, unsigned int type) {
-	mtl.textures = (mtl.textures | (1 << type));
-}
 
 struct WindowSize {
 	int width{ 1280 };
 	int height{ 720 };
 	int pixels{ 921600 };
-	float invWidth{ 0.00078125 };
+	float invWidth{ 0.00078125f };
 	float invHeight{ 0.00138888888888889f };
 };
 
@@ -307,14 +406,6 @@ struct Scene {
 	std::vector<Triangle> trigBuf;
 	unsigned int mtlTypes;
 };
-inline __device__ __host__ bool hasMaterial(const Scene& scene, unsigned int type) {
-	return (scene.mtlTypes & (1 << type)) != 0;
-}
-inline __device__ __host__ void addMaterialType(Scene& scene, unsigned int type) {
-	scene.mtlTypes = (scene.mtlTypes | (1 << type));
-}
-
-extern Scene scene; // global variable
 
 }
 
