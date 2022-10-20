@@ -14,55 +14,6 @@
 
 namespace nagi {
 
-struct ifHit {
-	__host__ __device__ bool operator()(const Path& x) {
-		return x.lastHit >= 0;
-	}
-};
-struct ifNotHit {
-	__host__ __device__ bool operator()(const Path& x) {
-		return x.lastHit < 0;
-	}
-};
-struct ifTerminated {
-	__host__ __device__ bool operator()(const Path& x) {
-		return x.remainingBounces <= 0;
-	}
-};
-struct ifNotTerminated {
-	__host__ __device__ bool operator()(const Path& x) {
-		return x.remainingBounces > 0;
-	}
-};
-struct IntersectionComp {
-	__host__ __device__ bool operator()(const IntersectInfo& a, const IntersectInfo& b) {
-		return (a.mtlIdx < b.mtlIdx);
-	}
-};
-
-__global__ void kernInitializeFrameBuffer(WindowSize window, float* frame);
-__global__ void kernInitializeRays(
-	WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter = true);
-// naive bvh
-// Do not use this function if a bvh is built since triangles were shuffled.
-__global__ void kernObjIntersectTest(int rayNum, Path* rayPool, int objNum, Object* objBuf, Triangle* trigBuf, IntersectInfo* out);
-// brute force
-__global__ void kernTrigIntersectTest(int rayNum, Path* rayPool, int trigIdxStart, int trigIdxEnd, Triangle* trigBuf, IntersectInfo* out);
-// oct tree bvh
-__global__ void kernBVHIntersectTest(int rayNum, Path* rayPool, int treeSize, BVH::Node* treeBuf, Triangle* trigBuf, IntersectInfo* out);
-__global__ void kernShadeLightSource(int rayNum, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
-__global__ void kernShadeLambert(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
-__global__ void kernShadeSpecular(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
-__global__ void kernShadeGlass(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
-__global__ void kernShadeMicrofacet(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf);
-__global__ void kernWriteFrameBuffer(WindowSize window, float currentSpp, Path* rayPool, float* albedoBuffer, float* frameBuffer, float* luminanceBuffer);
-__global__ void kernGenerateSkyboxAlbedo(
-	int rayNum, float currentSpp, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool, float* albedoBuf);
-__global__ void kernGenerateGbuffer(
-	int rayNum, float currentSpp, int bounce, glm::vec3 camPos, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf,
-	float* currentAlbedoBuf, float* currentNormalBuf, float* currentDepthBuf, float* albedoBuf, float* normalBuf, float* depthBuf);
-__global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm::vec3 rotate, glm::vec3 up, glm::vec3 right, Path* rayPool);
-
 class PathTracer {
 public:
 	PathTracer(Scene& Scene, BVH& BVH);

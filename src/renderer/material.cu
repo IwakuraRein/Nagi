@@ -75,6 +75,7 @@ namespace Microfacet {
 __device__ glm::vec3 bsdf(
 	const glm::vec3& v, const glm::vec3& l, const IntersectInfo& intersect, const Material& mtl) {
 	getNormal(intersect, mtl)
+	if (glm::dot(v, normal) >= 0.f) return glm::vec3{ 0.f };
 	getAlbedo(intersect, mtl)
 	getMetallic(intersect, mtl)
 	getRoughness(intersect, mtl)
@@ -263,4 +264,205 @@ __device__ bool eval(
 }
 
 }
+
+namespace Specular {
+__device__ glm::vec3 bsdf(
+	const glm::vec3& v, const glm::vec3& l, const IntersectInfo& intersect, const Material& mtl) {
+	getNormal(intersect, mtl)
+	if (glm::dot(v, normal) >= 0.f) return glm::vec3{ 0.f };
+	getAlbedo(intersect, mtl)
+	getMetallic(intersect, mtl)	
+	float hv = fmaxf(glm::dot(normal, -v), 0.f);
+	//glm::vec3 F = glm::mix(ior, albedo, metallic);
+	glm::vec3 F = albedo * metallic;
+	F = F + (1.f - F) * powf(1.f - hv, 5.f);
+
+	return (1.f - metallic) * (1.f - F) * albedo * INV_PI * fmaxf(glm::dot(v, normal), 0.f) + F * albedo;
+}
+
+__device__ glm::vec3 sampler(
+	const glm::vec3& v, const IntersectInfo& intersect, const Material& mtl, thrust::default_random_engine& rng, float& pdf) {
+	getNormal(intersect, mtl)
+	getMetallic(intersect, mtl)
+	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
+	float rnd = u01(rng);
+	float hv = glm::dot(normal, -v);
+	float F = metallic + (1.f - metallic) * powf(1.f - fmaxf(hv, 0.f), 5.f);
+	float pdf2;
+	glm::vec3 l;
+	if (rnd > F) { // cosine hemisphere
+		rnd = u01(rng);
+		float phi = rnd * TWO_PI;
+		rnd = u01(rng);
+		float r = sqrtf(rnd);
+
+		glm::vec3 l_tan{ glm::cos(phi) * r, glm::sin(phi) * r, sqrtf(1.0f - rnd) };
+
+		pdf2 = l_tan.z * INV_PI;
+
+		glm::vec3 T = getDifferentDir(normal);
+		T = glm::normalize(glm::cross(T, normal));
+		glm::vec3 B = glm::normalize(glm::cross(T, normal));
+
+		l = glm::normalize(T * l_tan.x + B * l_tan.y + normal * l_tan.z);
+	}
+	else {
+		l = glm::reflect(v, normal);
+		float cosine = fmaxf(glm::dot(l, normal), 0.f);
+		pdf2 = sqrtf(1 - cosine * cosine) * INV_PI;
+	}
+
+	pdf = pdf2 * (1 - F) + F;
+	return l;
+}
+
+__device__ float pdf(const glm::vec3& v, const glm::vec3& l, const IntersectInfo& intersect, const Material& mtl) {
+	getNormal(intersect, mtl)
+	getMetallic(intersect, mtl)
+	float hv = glm::dot(normal, -v);
+	float F = metallic + (1.f - metallic) * powf(1.f - fmaxf(hv, 0.f), 5.f);
+	float cosine = fmaxf(glm::dot(l, normal), 0.f);
+	return sqrtf(1 - cosine * cosine) * INV_PI * (1 - F) + F;
+}
+
+__device__ bool eval(
+	const glm::vec3& v, glm::vec3& l, glm::vec3& eval, const IntersectInfo& intersect, const Material& mtl, thrust::default_random_engine& rng) {
+	getNormal(intersect, mtl)
+	if (glm::dot(v, normal) >= 0.f) return false;
+	
+	getMetallic(intersect, mtl)
+	getAlbedo(intersect, mtl)
+	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
+	float rnd = u01(rng);
+	float hv = glm::dot(normal, -v);
+	float F = metallic + (1.f - metallic) * powf(1.f - fmaxf(hv, 0.f), 5.f);
+	float pdf2;
+	if (rnd > F) { // cosine hemisphere
+		rnd = u01(rng);
+		float phi = rnd * TWO_PI;
+		rnd = u01(rng);
+		float r = sqrtf(rnd);
+
+		glm::vec3 l_tan{ glm::cos(phi) * r, glm::sin(phi) * r, sqrtf(1.0f - rnd) };
+
+		pdf2 = l_tan.z * INV_PI;
+
+		glm::vec3 T = getDifferentDir(normal);
+		T = glm::normalize(glm::cross(T, normal));
+		glm::vec3 B = glm::normalize(glm::cross(T, normal));
+
+		l = glm::normalize(T * l_tan.x + B * l_tan.y + normal * l_tan.z);
+	}
+	else {
+		l = glm::reflect(v, normal);
+		float cosine = fmaxf(glm::dot(l, normal), 0.f);
+		pdf2 = sqrtf(1 - cosine * cosine) * INV_PI;
+	}
+
+	if (glm::dot(l, normal) <= 0.f) return false;
+	float pdf = pdf2 * (1 - F) + F;
+	if (pdf < PDF_EPSILON) return false;
+	//glm::vec3 F = glm::mix(ior, albedo, metallic);
+	glm::vec3 F2 = albedo * metallic;
+	F2 = F2 + (1.f - F2) * powf(1.f - hv, 5.f);
+
+	eval = (1.f - metallic) * (1.f - F2) * albedo * INV_PI * fmaxf(glm::dot(v, normal), 0.f) + F2 * albedo;
+	eval /= pdf;
+	return true;
+}
+
+}
+
+namespace Glass {
+__device__ glm::vec3 bsdf(
+	const glm::vec3& v, const glm::vec3& l, const IntersectInfo& intersect, const Material& mtl) {
+	getAlbedo(intersect, mtl)
+	return albedo;
+}
+
+__device__ glm::vec3 sampler(
+	const glm::vec3& v, const IntersectInfo& intersect, const Material& mtl, thrust::default_random_engine& rng, float& pdf) {
+	getNormal(intersect, mtl)
+	float ior = mtl.ior;
+	
+	thrust::uniform_real_distribution<float> u01(0.f, 1.f);
+	float rnd = u01(rng);
+	float invEta, iorI, iorT;
+	float cosI = glm::dot(v, normal);
+	pdf = 1.f;
+	if (cosI < 0) { // enter
+		cosI = -cosI;
+		normal = -normal;
+		invEta = 1.f / ior;
+		iorI = 1.f;
+		iorT = ior;
+	}
+	else { // leave
+		invEta = ior;
+		iorI = ior;
+		iorT = 1.f;
+	}
+
+	float cosT = 1.f - invEta * invEta * fmaxf(0.f, (1.f - cosI * cosI));
+	if (cosT <= 0.f) { // internal reflection
+		return glm::reflect(v, -normal);
+	}
+	else {
+		cosT = sqrtf(cosT);
+		float F = fresnel(cosI, cosT, iorI, iorT);
+
+		if (rnd < F) {
+			return glm::reflect(v, -normal);
+		}
+		return v * invEta + normal * (cosT - invEta * cosI);
+	}
+}
+
+
+__device__ float pdf(const glm::vec3& v, const glm::vec3& l, const IntersectInfo& intersect, const Material& mtl) {
+	return 1.f;
+}
+
+__device__ bool eval(
+	const glm::vec3& v, glm::vec3& l, glm::vec3& eval, const IntersectInfo& intersect, const Material& mtl, thrust::default_random_engine& rng) {
+	getNormal(intersect, mtl)
+	getAlbedo(intersect, mtl)
+	float ior = mtl.ior;
+
+	thrust::uniform_real_distribution<float> u01(0.f, 1.f);
+	float rnd = u01(rng);
+	float invEta, iorI, iorT;
+	float cosI = glm::dot(v, normal);
+	if (cosI < 0) { // enter
+		cosI = -cosI;
+		normal = -normal;
+		invEta = 1.f / ior;
+		iorI = 1.f;
+		iorT = ior;
+	}
+	else { // leave
+		invEta = ior;
+		iorI = ior;
+		iorT = 1.f;
+	}
+
+	float cosT = 1.f - invEta * invEta * fmaxf(0.f, (1.f - cosI * cosI));
+	if (cosT <= 0.f) { // internal reflection
+		l = glm::reflect(v, -normal);
+	}
+	else {
+		cosT = sqrtf(cosT);
+		float F = fresnel(cosI, cosT, iorI, iorT);
+
+		if (rnd < F) {
+			l = glm::reflect(v, -normal);
+		}
+		else l = v * invEta + normal * (cosT - invEta * cosI);
+	}
+	eval = albedo;
+	return true;
+}
+
+}
+
 }

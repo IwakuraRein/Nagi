@@ -120,6 +120,34 @@ __device__ glm::vec3 bsdf(
 
 }
 
+namespace Specular {
+__device__ glm::vec3 bsdf(
+	const glm::vec3& v, const glm::vec3& l, const IntersectInfo& intersect, const Material& mtl);
+
+__device__ glm::vec3 sampler(
+	const glm::vec3& v, const IntersectInfo& intersect, const Material& mtl, thrust::default_random_engine& rng, float& pdf);
+
+__device__ float pdf(const glm::vec3& v, const glm::vec3& l, const IntersectInfo& intersect, const Material& mtl);
+
+__device__ bool eval(
+	const glm::vec3& v, glm::vec3& l, glm::vec3& eval, const IntersectInfo& intersect, const Material& mtl, thrust::default_random_engine& rng);
+
+}
+
+namespace Glass {
+__device__ glm::vec3 bsdf(
+	const glm::vec3& v, const glm::vec3& l, const IntersectInfo& intersect, const Material& mtl);
+
+__device__ glm::vec3 sampler(
+	const glm::vec3& v, const IntersectInfo& intersect, const Material& mtl, thrust::default_random_engine& rng, float& pdf);
+
+__device__ float pdf(const glm::vec3& v, const glm::vec3& l, const IntersectInfo& intersect, const Material& mtl);
+
+__device__ bool eval(
+	const glm::vec3& v, glm::vec3& l, glm::vec3& eval, const IntersectInfo& intersect, const Material& mtl, thrust::default_random_engine& rng);
+
+}
+
 }
 
 #endif // !MATERIAL_CUH

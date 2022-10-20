@@ -121,6 +121,45 @@ PathTracer::~PathTracer() {
 #endif // DEB_INFO
 }
 
+__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter) {
+	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+	if (idx >= window.pixels) return;
+	thrust::default_random_engine rng = makeSeededRandomEngine(spp, idx, 0);
+	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
+
+	Path path{};
+	path.pixelIdx = idx;
+	path.remainingBounces = maxBounce;
+	path.ray.origin = cam.position;
+
+	int py = idx / window.width;
+	int px = idx - py * window.width;
+
+	float theta = TWO_PI * u01(rng);
+	float r = u01(rng) * cam.apenture;
+
+	float rnd1{ 0.f };
+	float rnd2{ 0.f };
+
+	if (jitter) {
+		rnd1 = u01(rng) - 0.5f;
+		rnd2 = u01(rng) - 0.5f;
+	}
+
+	glm::vec3 lookAt = cam.filmOrigin
+		- cam.upDir * (((float)py + rnd1) * cam.pixelHeight + cam.halfPixelHeight)
+		+ cam.rightDir * (((float)px + rnd2) * cam.pixelWidth + cam.halfPixelWidth);
+	glm::vec3 offset = -cam.upDir * r * glm::cos(theta);
+	offset += cam.rightDir * r * glm::sin(theta);
+
+	path.ray.dir = glm::normalize(lookAt - cam.position - offset * CAMERA_MULTIPLIER);
+	path.ray.invDir = 1.f / path.ray.dir;
+	path.ray.origin = cam.position + offset;
+	path.lastHit = 1;
+	path.color = glm::vec3{ 1.f, 1.f, 1.f };
+	rayPool[idx] = path;
+}
+
 // intersection test -> compact rays -> sort rays according to material -> compute color -> compact rays -> intersection test...
 void PathTracer::iterate() {
 	std::chrono::steady_clock::time_point timer = std::chrono::high_resolution_clock::now();
@@ -335,6 +374,11 @@ int PathTracer::intersectionTest(int rayNum) {
 	return rayNum;
 }
 
+struct IntersectionComp {
+	__host__ __device__ bool operator()(const IntersectInfo& a, const IntersectInfo& b) {
+		return (a.mtlIdx < b.mtlIdx);
+	}
+};
 // sort rays according to materials
 void PathTracer::sortRays(int rayNum) {
 	thrust::device_ptr<Path> tRays{ devRayPool1 };
@@ -494,13 +538,12 @@ void PathTracer::generateGbuffer(int rayNum, int spp, int bounce) {
 
 
 // compute color and generate new ray direction
-__global__ void kernShadeLambert(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
+__global__ void kernShade(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= rayNum) return;
 
 	IntersectInfo intersection = intersections[idx];
 	Material mtl = mtlBuf[intersection.mtlIdx];
-	if (mtl.type != MTL_TYPE_LAMBERT) return;
 
 	Path p = rayPool[idx];
 	p.ray.origin = intersection.position;
@@ -511,156 +554,37 @@ __global__ void kernShadeLambert(int rayNum, int spp, int bounce, Path* rayPool,
 	else {
 		auto rng = makeSeededRandomEngine(spp, idx, bounce);
 		glm::vec3 wo, eval;
-		if (Lambert::eval(p.ray.dir, wo, eval, intersection, mtlBuf[intersection.mtlIdx], rng)) {
-			p.color *= eval; // lambert is timed inside the bsdf
-			p.ray.dir = wo;
-			p.ray.invDir = 1.f / wo;
-
-			p.remainingBounces--;
+		bool effective;
+		switch (mtl.type)
+		{
+		case MTL_TYPE_LIGHT_SOURCE:
+			getNormal(intersection, mtl)
+			if (glm::dot(p.ray.dir, normal) >= 0.f) effective = false;
+			else {
+				effective = true;
+				p.ray.origin = intersection.position;
+				p.remainingBounces = 0;
+				eval = mtl.albedo;
+				p.ray.origin = intersection.position;
+			}
+			break;
+		case MTL_TYPE_LAMBERT:
+			effective = Lambert::eval(p.ray.dir, wo, eval, intersection, mtl, rng);
+			break;
+		case MTL_TYPE_MICROFACET:
+			effective = Microfacet::eval(p.ray.dir, wo, eval, intersection, mtl, rng);
+			break;
+		case MTL_TYPE_SPECULAR:
+			effective = Specular::eval(p.ray.dir, wo, eval, intersection, mtl, rng);
+			break;
+		case MTL_TYPE_GLASS:
+			effective = Glass::eval(p.ray.dir, wo, eval, intersection, mtl, rng);
+			p.ray.origin += wo * REFRACT_OFFSET;
+			break;
+		default:
+			break;
 		}
-		else {
-			p.color = glm::vec3{ 0.f };
-			p.remainingBounces = 0;
-		}
-	}
-	rayPool[idx] = p;
-}
-__global__ void kernShadeSpecular(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
-	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= rayNum) return;
-
-	IntersectInfo intersection = intersections[idx];
-	Material mtl = mtlBuf[intersection.mtlIdx];
-	if (mtl.type != MTL_TYPE_SPECULAR) return;
-
-	Path p = rayPool[idx];
-	p.ray.origin = intersection.position;
-
-	if (p.remainingBounces == 0 || glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
-		p.color = glm::vec3{ 0.f };
-		p.remainingBounces = 0;
-	}
-	else {
-		auto rng = makeSeededRandomEngine(spp, idx, bounce);
-		glm::vec3 normal, albedo;
-		float metallic;
-		if (hasBit(mtl.textures, TEXTURE_TYPE_NORMAL)) {
-			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
-			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
-			glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
-			bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
-			normal = glm::normalize(TBN * bump);
-		}
-		else normal = intersection.normal;
-		if (hasBit(mtl.textures, TEXTURE_TYPE_BASE)) {
-			float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
-			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
-		}
-		else albedo = mtl.albedo;
-		if (hasBit(mtl.textures, TEXTURE_TYPE_METALLIC)) {
-			metallic = tex2D<float>(mtl.metallicTex.devTexture, intersection.uv.x, intersection.uv.y);
-		}
-		else metallic = mtl.metallic;
-
-		float pdf;
-		glm::vec3 wo = reflectSampler(metallic, albedo, p.ray.dir, normal, pdf, rng);
-		if (pdf < PDF_EPSILON) {
-			p.color = glm::vec3{ 0.f };
-			p.remainingBounces = 0;
-		}
-		else {
-			glm::vec3 brdf = specularBrdf(p.ray.dir, wo, normal, albedo, metallic); // lambert is timed inside the bsdf
-			p.color = p.color * brdf / pdf;
-			p.ray.dir = wo;
-			p.ray.invDir = 1.f / p.ray.dir;
-
-			p.remainingBounces--;
-		}
-	}
-	rayPool[idx] = p;
-}
-__global__ void kernShadeLightSource(int rayNum, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
-	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= rayNum) return;
-
-	IntersectInfo intersection = intersections[idx];
-	Material mtl = mtlBuf[intersection.mtlIdx];
-	if (mtl.type != MTL_TYPE_LIGHT_SOURCE) return;
-
-	Path p = rayPool[idx];
-	p.ray.origin = intersection.position;
-
-	p.remainingBounces = 0;
-	if (glm::dot(intersection.normal, p.ray.dir) >= 0.f) {
-		p.color = glm::vec3{ 0.f };
-	}
-	else {
-		p.color *= mtl.albedo;
-	}
-	rayPool[idx] = p;
-}
-__global__ void kernShadeGlass(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
-	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= rayNum) return;
-
-	IntersectInfo intersection = intersections[idx];
-	Material mtl = mtlBuf[intersection.mtlIdx];
-	if (mtl.type != MTL_TYPE_GLASS) return;
-
-	Path p = rayPool[idx];
-	p.ray.origin = intersection.position;
-
-	if (p.remainingBounces == 0) {
-		p.color = glm::vec3{ 0.f };
-	}
-	else {
-		auto rng = makeSeededRandomEngine(spp, idx, bounce);
-		thrust::uniform_real_distribution<double> u01(0.f, 1.f);
-		glm::vec3 normal, albedo;
-		glm::vec3 wo;
-		if (hasBit(mtl.textures, TEXTURE_TYPE_NORMAL)) {
-			glm::mat3 TBN = glm::mat3(intersection.tangent, glm::cross(intersection.normal, intersection.tangent), intersection.normal);
-			float4 texVal = tex2D<float4>(mtl.normalTex.devTexture, intersection.uv.x, intersection.uv.y);
-			glm::vec3 bump{ -texVal.x * 2.f + 1.f, -texVal.y * 2.f + 1.f, texVal.z * 2.f - 1.f };
-			bump.z = sqrtf(1.f - glm::clamp(bump.x * bump.x + bump.y * bump.y, 0.f, 1.f));
-			normal = glm::normalize(TBN * bump);
-		}
-		else normal = intersection.normal;
-		if (hasBit(mtl.textures, TEXTURE_TYPE_BASE)) {
-			float4 baseTex = tex2D<float4>(mtl.baseTex.devTexture, intersection.uv.x, intersection.uv.y);
-			albedo = glm::vec3{ baseTex.x, baseTex.y, baseTex.z };
-		}
-		else albedo = mtl.albedo;
-
-		float pdf;
-		wo = refractSampler(mtl.ior, p.ray.dir, normal, pdf, rng);
-		p.color = p.color * albedo / pdf;
-		p.ray.origin += wo * REFRACT_OFFSET;
-		p.ray.dir = wo;
-		p.ray.invDir = 1.f / wo;
-		p.remainingBounces--;
-	}
-	rayPool[idx] = p;
-}
-__global__ void kernShadeMicrofacet(int rayNum, int spp, int bounce, Path* rayPool, IntersectInfo* intersections, Material* mtlBuf) {
-	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= rayNum) return;
-
-	IntersectInfo intersection = intersections[idx];
-	Material mtl = mtlBuf[intersection.mtlIdx];
-	if (mtl.type != MTL_TYPE_MICROFACET) return;
-
-	Path p = rayPool[idx];
-	p.ray.origin = intersection.position;
-
-
-	if (p.remainingBounces == 0) {
-		p.color = glm::vec3{ 0.f };
-	}
-	else {
-		auto rng = makeSeededRandomEngine(spp, idx, bounce);
-		glm::vec3 wo, eval;
-		if (Microfacet::eval(p.ray.dir, wo, eval, intersection, mtlBuf[intersection.mtlIdx], rng)) {
+		if (effective) {
 			p.color *= eval; // lambert is timed inside the bsdf
 			p.ray.dir = wo;
 			p.ray.invDir = 1.f / wo;
@@ -681,20 +605,7 @@ int PathTracer::shade(int rayNum, int spp, int bounce) {
 #ifdef DEB_INFO
 	tik();
 #endif // DEB_INFO;
-	if (hasBit(scene.mtlTypes, MTL_TYPE_LIGHT_SOURCE))
-		kernShadeLightSource<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, devRayPool1, devResults1, devMtlBuf);
-
-	if (hasBit(scene.mtlTypes, MTL_TYPE_LAMBERT))
-		kernShadeLambert<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
-
-	if (hasBit(scene.mtlTypes, MTL_TYPE_SPECULAR))
-		kernShadeSpecular<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
-
-	if (hasBit(scene.mtlTypes, MTL_TYPE_GLASS))
-		kernShadeGlass<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
-
-	if (hasBit(scene.mtlTypes, MTL_TYPE_MICROFACET))
-		kernShadeMicrofacet<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
+	kernShade<<<blocksPerGrid, BLOCK_SIZE>>> (rayNum, spp, bounce, devRayPool1, devResults1, devMtlBuf);
 #ifdef DEB_INFO
 	shadingTime += tok();
 #endif // DEB_INFO;
@@ -710,6 +621,28 @@ int PathTracer::shade(int rayNum, int spp, int bounce) {
 	std::swap(devRayPool1, devRayPool2);
 	return rayNum;
 }
+
+
+struct ifHit {
+	__host__ __device__ bool operator()(const Path& x) {
+		return x.lastHit >= 0;
+	}
+};
+struct ifNotHit {
+	__host__ __device__ bool operator()(const Path& x) {
+		return x.lastHit < 0;
+	}
+};
+struct ifTerminated {
+	__host__ __device__ bool operator()(const Path& x) {
+		return x.remainingBounces <= 0;
+	}
+};
+struct ifNotTerminated {
+	__host__ __device__ bool operator()(const Path& x) {
+		return x.remainingBounces > 0;
+	}
+};
 
 // delete rays that hit nothing
 int PathTracer::compactRays(int rayNum, Path* rayPool, Path* compactedRayPool, IntersectInfo* intersectResults, IntersectInfo* compactedIntersectResults) {
@@ -741,46 +674,6 @@ int PathTracer::compactRays(int rayNum, Path* rayPool, Path* compactedRayPool) {
 	terminatedRayNum += (rayNum - remaining);
 	return remaining;
 }
-
-__global__ void kernInitializeRays(WindowSize window, int spp, Path* rayPool, int maxBounce, const Camera cam, bool jitter) {
-	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-	if (idx >= window.pixels) return;
-	thrust::default_random_engine rng = makeSeededRandomEngine(spp, idx, 0);
-	thrust::uniform_real_distribution<double> u01(0.f, 1.f);
-
-	Path path{};
-	path.pixelIdx = idx;
-	path.remainingBounces = maxBounce;
-	path.ray.origin = cam.position;
-
-	int py = idx / window.width;
-	int px = idx - py * window.width;
-
-	float theta = TWO_PI * u01(rng);
-	float r = u01(rng) * cam.apenture;
-
-	float rnd1{ 0.f };
-	float rnd2{ 0.f };
-
-	if (jitter) {
-		rnd1 = u01(rng) - 0.5f;
-		rnd2 = u01(rng) - 0.5f;
-	}
-
-	glm::vec3 lookAt = cam.filmOrigin
-		- cam.upDir * (((float)py + rnd1) * cam.pixelHeight + cam.halfPixelHeight)
-		+ cam.rightDir * (((float)px + rnd2) * cam.pixelWidth + cam.halfPixelWidth);
-	glm::vec3 offset = -cam.upDir * r * glm::cos(theta);
-	offset += cam.rightDir * r * glm::sin(theta);
-
-	path.ray.dir = glm::normalize(lookAt - cam.position - offset * CAMERA_MULTIPLIER);
-	path.ray.invDir = 1.f / path.ray.dir;
-	path.ray.origin = cam.position + offset;
-	path.lastHit = 1;
-	path.color = glm::vec3{ 1.f, 1.f, 1.f };
-	rayPool[idx] = path;
-}
-
 __global__ void kernInitializeFrameBuffer(WindowSize window, float* frame) {
 	int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 	if (idx >= window.pixels) return;
