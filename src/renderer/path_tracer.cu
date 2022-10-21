@@ -555,8 +555,7 @@ __global__ void kernShade(int rayNum, int spp, int bounce, Path* rayPool, Inters
 		auto rng = makeSeededRandomEngine(spp, idx, bounce);
 		glm::vec3 wo, eval;
 		bool effective;
-		switch (mtl.type)
-		{
+		switch (mtl.type) {
 		case MTL_TYPE_LIGHT_SOURCE:
 			getNormal(intersection, mtl)
 			if (glm::dot(p.ray.dir, normal) >= 0.f) effective = false;
@@ -588,14 +587,14 @@ __global__ void kernShade(int rayNum, int spp, int bounce, Path* rayPool, Inters
 			p.color *= eval; // lambert is timed inside the bsdf
 			p.ray.dir = wo;
 			p.ray.invDir = 1.f / wo;
-
-			p.remainingBounces--;
 		}
 		else {
 			p.color = glm::vec3{ 0.f };
 			p.remainingBounces = 0;
 		}
 	}
+
+	p.remainingBounces--;
 	rayPool[idx] = p;
 }
 
@@ -635,12 +634,12 @@ struct ifNotHit {
 };
 struct ifTerminated {
 	__host__ __device__ bool operator()(const Path& x) {
-		return x.remainingBounces <= 0;
+		return x.remainingBounces < 0;
 	}
 };
 struct ifNotTerminated {
 	__host__ __device__ bool operator()(const Path& x) {
-		return x.remainingBounces > 0;
+		return x.remainingBounces >= 0;
 	}
 };
 
@@ -732,7 +731,7 @@ __global__ void kernShadeWithSkybox(int rayNum, cudaTextureObject_t skybox, glm:
 		p.color *= glm::vec3{ texColor.x, texColor.y, texColor.z };
 
 		p.lastHit = 1;
-		p.remainingBounces = 0;
+		p.remainingBounces = -1;
 
 		rayPool[idx] = p;
 	}
