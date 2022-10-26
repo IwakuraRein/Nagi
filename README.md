@@ -61,9 +61,12 @@ The scene is defined by a JSON file. It is very self-explanatory and contains re
 
 ![](./doc/dop.png)
 
-## Oct-tree
+## Acceleration Structure
 
-To accelerate the intersection test. I divide each model's triangles and store them in oct-tree structures. Then all objects will be passed into the path tracer in an array sorted by their volume. The path tracer will perform a depth-first search in the intersection test.
+To accelerate the intersection test, at first, I divide each model's triangles and store them in oct-tree structures. Then all objects will be passed into the path tracer in an array sorted by their volume. The path tracer will perform a depth-first search in the intersection test.
+
+Then I realized using a bottom-to-top bounding volume hiearchy is more optimal. And the stack for DFS consume too much memories so I adopted the [BVH described in PBRT](https://www.pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies) and [the stack-free traversal](https://arxiv.org/abs/1505.06022).
+
 The triangle intersected with the shortest distance will be recorded. If the distance to an object is larger than the last recorded distance to the triangle, all its triangles will be surpassed.
 
 ## Performance Analysis
@@ -72,11 +75,13 @@ After dividing the scene into an oct-tree structure, a huge improvement of speed
 
 ![](./doc/time-oct-tree.png)
 
+It is interesting that sorting the rays according to their material slightly lower the performance. The overhead of sorting might counteract the improvement brought by memory coalescing.
+
 However, when a mesh is rectangular and contain large triangles, like this mesh from the [Modern Hall scene](http://www.blendswap.com/blends/view/51997), the oct-tree fails to divide it effectively.
 
 ![](./doc/stair_case_mesh.png)
 
-The time cost for the Staircase scene increases to 8 seconds per spp. Therefore, I replaced the oct-tree with [bounding volume hiearchy described in PBRT](https://www.pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies) and adopted [the stack-free traversal](https://arxiv.org/abs/1505.06022). This significantly improved the performance. The timecost for the Modern Hall scene droped to 10ms!
+The time cost for the Staircase scene increases to 8 seconds per spp. Therefore, I replaced the oct-tree with BVH and adopted the stack-free traversal. This significantly improved the performance. The timecost for the Modern Hall scene droped to 10ms!
 
 ## [Denoiser](https://github.com/IwakuraRein/CIS-565-4-CUDA-Denoiser/blob/base-code/README.md)
 
