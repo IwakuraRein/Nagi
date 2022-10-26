@@ -319,7 +319,7 @@ __global__ void kernRetrieveColor(int pixels, float* result, float* luminance, f
 
 // reference: https://dl.acm.org/doi/10.1145/3105762.3105770
 //            http://diglib.eg.org/handle/10.2312/EGGH.HPG10.067-075
-
+// 
 //todo: optimization with shared memeory
 __global__ void kernBilateralFilter(
     WindowSize window, int dilation, float* denoised, float* origin, float* luminance, float* luminance2, float* normal, float* depth, float sigmaN, float sigmaZ, float sigmaL) {
@@ -412,7 +412,7 @@ void GUI::denoise() {
 
     kernDiscardColor<<<blocksPerGrid, BLOCK_SIZE>>>(wSize.pixels, devDenoisedResult1, pathTracer.devFrameBuf, pathTracer.devAlbedoBuf);
     kernGetY<<<blocksPerGrid, BLOCK_SIZE>>>(wSize.pixels, devLuminance, devDenoisedResult1);
-    
+   
 	kernBilateralFilter<<<blocksPerGrid, BLOCK_SIZE>>>(
 		wSize, 1, devDenoisedResult2, devDenoisedResult1, devLuminance, pathTracer.devLumiance2Buf, pathTracer.devCurrentNormalBuf, pathTracer.devCurrentDepthBuf, sigmaN, sigmaZ, sigmaL);
 	std::swap(devDenoisedResult1, devDenoisedResult2);

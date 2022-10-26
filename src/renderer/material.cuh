@@ -89,7 +89,6 @@ __inline__ __device__ thrust::default_random_engine makeSeededRandomEngine(const
 	} \
 	else roughness =  mtl.roughness; \
 
-
 namespace Lambert {
 // brdf (include lambert)
 __device__ glm::vec3 bsdf(

@@ -16,7 +16,6 @@ Nagi is a simple path tracer built in CUDA. As shown in the picture, it's capabl
 
 ## Features
 
-
 <video src="https://user-images.githubusercontent.com/28486541/198067385-cf9353ab-5a11-40fb-b030-91e3afd91056.mp4"></video>
 
 **Finished**
@@ -81,6 +80,17 @@ The time cost for the Staircase scene increases to 8 seconds per spp. Therefore,
 
 ## [Denoiser](https://github.com/IwakuraRein/CIS-565-4-CUDA-Denoiser/blob/base-code/README.md)
 
-![](./doc/denoiser.png)
+<table>
+    <tr>
+        <th>original</th>
+        <th>real-time denoiser</th>
+        <th>Open Image Denoise</th>
+    </tr>
+    <tr>
+        <th><img src="./doc/cornel_box_64.png"/></th>
+        <th><img src="./doc/cornel_box_64_bi_filter.png"/></th>
+        <th><img src="./doc/cornel_box_64_oidn.png"/></th>
+    </tr>
+</table>
 
 For the real-time preview, I implemented [SVGF](https://dl.acm.org/doi/10.1145/3105762.3105770) as the denoiser. For the final result, I implemented Intel's [Open Image Denoise](https://www.openimagedenoise.org/).
