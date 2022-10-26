@@ -16,6 +16,9 @@ Nagi is a simple path tracer built in CUDA. As shown in the picture, it's capabl
 
 ## Features
 
+
+<video src="https://user-images.githubusercontent.com/28486541/198067385-cf9353ab-5a11-40fb-b030-91e3afd91056.mp4"></video>
+
 **Finished**
 
 - [x] Mesh Loading
@@ -66,24 +69,18 @@ The triangle intersected with the shortest distance will be recorded. If the dis
 
 ## Performance Analysis
 
-After introducing Oct-tree structure, a huge improvement of speed can be seen:
+After dividing the scene into an oct-tree structure, a huge improvement of speed can be seen:
 
 ![](./doc/time-oct-tree.png)
 
-However, when a mesh is rectangular and contain large triangles, like this mesh from the Staircase scene, the oct-tree fails to divide it effectively.
+However, when a mesh is rectangular and contain large triangles, like this mesh from the [Modern Hall scene](http://www.blendswap.com/blends/view/51997), the oct-tree fails to divide it effectively.
 
 ![](./doc/stair_case_mesh.png)
 
-The time cost for the Staircase scene increases to 8 seconds per spp. On the other hand, the time cost for the Cannon scene is only 0.2 second despite having 83,000 triangles. Its meshes are rounded and containing small triangles:
+The time cost for the Staircase scene increases to 8 seconds per spp. Therefore, I replaced the oct-tree with [bounding volume hiearchy described in PBRT](https://www.pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies) and adopted [the stack-free traversal](https://arxiv.org/abs/1505.06022). This significantly improved the performance. The timecost for the Modern Hall scene droped to 10ms!
 
-![](./doc/cannon_mesh.png)
-
-In general, the time cost of 1 spp varies from 0.2-2 seconds.
-
-The performance slightly drops if rays are sorted according to their materials after the intersection. The stable sort function itself is costly so the improvement may be counteracted.
-
-## Denoiser
+## [Denoiser](https://github.com/IwakuraRein/CIS-565-4-CUDA-Denoiser/blob/base-code/README.md)
 
 ![](./doc/denoiser.png)
 
-I implemented a simple bilateral filter as the denoiser. I also added Intel's [Open Image Denoise](https://www.openimagedenoise.org/). You can choose them by setting the denoiser value in the scene definition to 1 or 2. Open Image Denoise's result is significantly better than the bilateral filter.
+For the real-time preview, I implemented [SVGF](https://dl.acm.org/doi/10.1145/3105762.3105770) as the denoiser. For the final result, I implemented Intel's [Open Image Denoise](https://www.openimagedenoise.org/).
