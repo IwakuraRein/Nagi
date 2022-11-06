@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
 	}
 	std::string saveDir = ".";
 	if (argc >= 3) {
-		saveDir = argv[3];
+		saveDir = argv[2];
 		strRightStrip(saveDir, "/");
 		strRightStrip(saveDir, "\\");
 	}

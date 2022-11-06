@@ -19,8 +19,6 @@ albedo*.hdr
 albedo*.png
 imgui.ini
 Renderer.exe
-OpenImageDenoise.dll
-tbb12.dll
 [Nn]agi.exe
 
 # User-specific files (MonoDevelop/Xamarin Studio)
