@@ -53,9 +53,15 @@ The scene is defined by a JSON file. It is very self-explanatory and contains re
 
 ![](./doc/staircase.png)
 
+Artisit: [NewSee2l035](https://blendswap.com/profile/35454)
+
 ![](./doc/cannon.png)
 
+Artisit: [James Ray Cock](https://www.artstation.com/jamesray), [Greg Zaal](https://gregzaal.com/), Dimitrios Savva
+
 ![](./doc/result1.png)
+
+Artisit: [JpArtSky](https://www.cgtrader.com/jpartsky)
 
 ![](./doc/result2.png)
 
