@@ -1,9 +1,9 @@
 {
     "graphics": {
         "resolution": [1024, 1024],
-        "sample rate": 64,
+        "sample rate": 16384,
         "max bounce": 8,
-        "denoiser": 1,
+        "denoiser": true,
         "gamma": 2.2
     },
     "materials": {
@@ -27,8 +27,11 @@
         },
         "Floor": {
             "type": "Lambert",
-            "roughness": 0.3,
-            "base texture": "WoodFloor.jpg"
+            "albedo": [
+                0.725,
+                0.71,
+                0.68
+            ]
         },
         "Ceiling": {
             "type": "Lambert",

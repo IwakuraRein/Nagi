@@ -3,9 +3,8 @@
         "resolution": [1024, 576],
         "sample rate": 8092,
         "max bounce": 8,
-        "denoiser": 2,
-        "alpha": 1.0,
-        "gamma": 1.0
+        "denoiser": true,
+        "gamma": 2.2
     },
     "materials": {
         "LightPanel": {

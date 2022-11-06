@@ -143,11 +143,9 @@ inline bool strStartWith(const std::string& str, const std::string& head) {
 
 inline std::string getFileName(const std::string& str) {
 	int i = str.size() - 1;
-	for (; i != 0; i--) {
-		if (str[i] == '/')
-			break;
-	}
-	if (str[i] == '/') i++;
+	for (; i != 0; i--)
+		if (str[i] == '/' || str[i] == '\\') break;
+	if (str[i] == '/' || str[i] == '\\') i++;
 	return str.substr(i, str.size() - i);
 }
 

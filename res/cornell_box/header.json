@@ -1,10 +1,10 @@
 {
     "graphics": {
         "resolution": [1024, 1024],
-        "sample rate": 8,
-        "max bounce": 16,
+        "sample rate": 4096,
+        "max bounce": 32,
         "gamma": 2.2,
-		"denoiser": 1
+        "denoiser": true
     },
     "materials": {
         "LeftWall": {
@@ -32,7 +32,7 @@
         },
         "glass": {
             "type": "Glass",
-			"albedo": [0.8, 0.8, 0.8],
+            "albedo": [0.961, 0.961, 0.961],
             "ior": 1.5
         },
         "Floor": {
@@ -69,7 +69,7 @@
         },
         "mirror": {
             "type": "Specular",
-			"metallic": 1
+            "metallic": 1
         },
         "TallBox": {
             "type": "Microfacet",
@@ -194,7 +194,8 @@
             ],
             "mesh": "quad",
             "material": "LightPanel"
-        },       "Ceiling": {
+        },
+        "Ceiling": {
             "position": [
                 0,
                 2,
@@ -250,7 +251,7 @@
             "mesh": "quad",
             "material": "LeftWall"
         }
-    }, 
+    },
     "camera": {
         "position": [
             0,
