@@ -1,0 +1,337 @@
+{
+    "graphics": {
+        "resolution": [1600, 1200],
+        "max_bounces": 16,
+        "sample rate": 4096,
+        "gamma": 2.2,
+        "denoiser": true
+    },
+    "materials": {
+        "Glass": {
+            "type": "Glass",
+            "ior": 1.5,
+            "albedo": [0.8, 0.8, 0.8]
+        },
+        "Wood": {
+            "type": "Microfacet",
+            "base texture": "textures/wood5.jpg",
+            "roughness": 0.1
+        },
+        "FloorTiles": {
+            "type": "Microfacet",
+            "base texture": "textures/Tiles.jpg",
+            "roughness": 0.05
+        },
+        "Wall": {
+            "type": "Lambert",
+            "albedo": [
+                0.893289,
+                0.893289,
+                0.893289
+            ]
+        },
+        "Wallpaper": {
+            "type": "Lambert",
+            "base texture": "textures/Wallpaper.jpg"
+        },
+        "SpotHolder": {
+            "type": "Lambert"
+        },
+        "Metal": {
+            "type": "Microfacet",
+            "roughness": 0.1,
+            "albedo": [0.91, 0.92, 0.92]
+        },
+        "Light1": {
+            "type": "Light Source",
+            "emittance": [3.26581, 3.26581, 3.26581]
+        },
+        "Light2": {
+            "type": "Light Source",
+            "emittance": [
+                4.575004577636719,
+                3.5907576084136965,
+                1.5497708320617676
+            ]
+        },
+        "Light3": {
+            "type": "Light Source",
+            "emittance": [
+                4.575004577636719,
+                3.5907576084136965,
+                1.5497708320617676
+            ]
+        },
+        "Light4": {
+            "type": "Light Source",
+            "emittance": [3.26581, 3.26581, 3.26581]
+        },
+        "Light5": {
+            "type": "Light Source",
+            "emittance": [1.5, 1.5, 1.5]
+        }
+    },
+    "objects": {
+        "DoorFrame1": {
+            "mesh": "models/Mesh012.obj",
+            "material": "Wall"
+        },
+        "DoorFrame2": {
+            "mesh": "models/Mesh005.obj",
+            "material": "Metal"
+        },
+        "floor3": {
+            "mesh": "models/Mesh016.obj",
+            "material": "Wood"
+        },
+        "floor2": {
+            "mesh": "models/Mesh017.obj",
+            "material": "Wood"
+        },
+        "wall3": {
+            "mesh": "models/Mesh018.obj",
+            "material": "Wallpaper"
+        },
+        "floor": {
+            "mesh": "models/Mesh011.obj",
+            "material": "FloorTiles"
+        },
+        "glass": {
+            "mesh": "models/Mesh014.obj",
+            "material": "Glass"
+        },
+        "stair2": {
+            "mesh": "models/Mesh001.obj",
+            "material": "Wood"
+        },
+        "wall": {
+            "rotation": [
+                0,
+                0,
+                0
+            ],
+            "mesh": "models/Mesh000009.obj",
+            "material": "Wall"
+        },
+        "Light1": {
+            "position": [-6.580517768859863,
+                9.927168846130371,
+                3.885404586791992
+            ],
+            "scale": [
+                3.064229726791382,
+                39.81578063964844,
+                12.993731498718262
+            ],
+            "rotation": [
+                0.0,
+                90.0,
+                107.91244506835938
+            ],
+            "material": "Light1",
+            "mesh": "quad"
+        },
+        "Light2": {
+            "position": [-2.3958899974823,
+                2.51810884475708,
+                3.443751096725464
+            ],
+            "scale": [
+                6.462972164154053,
+                33.08522033691406,
+                5.119195938110352
+            ],
+            "rotation": [90.0,
+                0.0,
+                0.0
+            ],
+            "material": "Light2",
+            "mesh": "quad"
+        },
+        "Light3": {
+            "position": [-14.09379768371582,
+                2.5352909564971924,
+                1.5435864925384521
+            ],
+            "scale": [
+                2.9091391563415527,
+                14.280311584472656, -4.908775806427002
+            ],
+            "rotation": [
+                90.0,
+                0.0,
+                90.0
+            ],
+            "material": "Light3",
+            "mesh": "quad"
+        },
+        "Light4": {
+            "position": [-1.4336243867874146, -2.8563129901885986, -1.321337103843689],
+            "scale": [
+                3.064230442047119,
+                19.493453979492188, -6.36161470413208
+            ],
+            "rotation": [
+                0.0,
+                90.0, -179.99998474121094
+            ],
+            "material": "Light4",
+            "mesh": "quad"
+        },
+        "light5": {
+            "position": [
+                1.8070319890975952,
+                5.610289096832275,
+                1.4979950189590454
+            ],
+            "scale": [0.10491610318422318, 0.10491610318422318, 0.10491610318422318],
+            "rotation": [0, 180, 0],
+            "material": "Light5",
+            "mesh": "disk"
+        },
+        "light6": {
+            "position": [-1.5106041431427002,
+                5.610289096832275,
+                1.4979950189590454
+            ],
+            "scale": [0.10491610318422318, 0.10491610318422318, 0.10491610318422318],
+            "rotation": [0, 180, 0],
+            "material": "Light5",
+            "mesh": "disk"
+        },
+        "light7": {
+            "position": [-4.828241348266602,
+                5.610289096832275,
+                1.4979950189590454
+            ],
+            "scale": [0.10491558909416199, 0.10491558909416199, 0.10491558909416199],
+            "rotation": [0, 180, 0],
+            "material": "Light5",
+            "mesh": "disk"
+        },
+        "light8": {
+            "position": [-8.145877838134766,
+                5.610289096832275,
+                1.4979950189590454
+            ],
+            "scale": [0.10491587221622467, 0.10491587221622467, 0.10491587221622467],
+            "rotation": [0, 180, 0],
+            "material": "Light5",
+            "mesh": "disk"
+        },
+        "light9": {
+            "position": [-11.463517189025879,
+                5.610289096832275,
+                1.4979950189590454
+            ],
+            "scale": [0.10491868108510971, 0.10491868108510971, 0.10491868108510971],
+            "rotation": [0, 180, 0],
+            "material": "Light5",
+            "mesh": "disk"
+        },
+        "light10": {
+            "position": [-4.927103042602539,
+                5.541969299316406, -2.9932379722595215
+            ],
+            "scale": [
+                0.13707971572875977,
+                0.018790913745760918, -0.13708019256591797
+            ],
+            "rotation": [-90, 0, 0],
+            "material": "Light5",
+            "mesh": "quad"
+        },
+        "light11": {
+            "position": [-2.3422961235046387,
+                3.9691739082336426, -2.9932379722595215
+            ],
+            "scale": [
+                0.13707995414733887,
+                0.018790913745760918, -0.13707995414733887
+            ],
+            "rotation": [-90, 0, 0],
+            "material": "Light5",
+            "mesh": "quad"
+        },
+        "light12": {
+            "position": [
+                0.09953000396490097,
+                2.5207910537719727, -2.993238925933838
+            ],
+            "scale": [
+                0.13707995414733887,
+                0.018790919333696365, -0.13707999885082245
+            ],
+            "rotation": [-90, 0, 0],
+            "material": "Light5",
+            "mesh": "quad"
+        },
+        "light13": {
+            "position": [
+                2.5506396293640137,
+                1.1002609729766846, -2.9932401180267334
+            ],
+            "scale": [
+                0.13707995414733887,
+                0.01879078336060047, -0.13707900047302246
+            ],
+            "rotation": [-90, 0, 0],
+            "material": "Light5",
+            "mesh": "quad"
+        },
+        "lightbase1": {
+            "material": "Metal",
+            "mesh": "Mesh002"
+        },
+        "lightbase2": {
+            "material": "Metal",
+            "mesh": "Mesh003"
+        },
+        "lightbase3": {
+            "material": "Metal",
+            "mesh": "Mesh004"
+        },
+        "lightbase4": {
+            "material": "Metal",
+            "mesh": "Mesh006"
+        },
+        "lightbase5": {
+            "material": "Metal",
+            "mesh": "Mesh007"
+        },
+        "lightbase6": {
+            "material": "Metal",
+            "mesh": "Mesh008"
+        },
+        "lightbase7": {
+            "material": "Metal",
+            "mesh": "Mesh010"
+        },
+        "lightbase8": {
+            "material": "Metal",
+            "mesh": "Mesh013"
+        },
+        "lightbase9": {
+            "material": "Metal",
+            "mesh": "Mesh015"
+        }
+    },
+    "camera": {
+        "position": [
+            6.9118194580078125,
+            1.6516278982162476,
+            2.5541365146636963
+        ],
+        "look at": [
+            2.328019380569458,
+            1.6516276597976685,
+            0.33640459179878235
+        ],
+        "up": [
+            0.0,
+            1.0,
+            0.0
+        ],
+        "fov": 55.413
+    }
+}

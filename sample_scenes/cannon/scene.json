@@ -1,0 +1,77 @@
+{
+    "graphics": {
+        "resolution": [1600, 900],
+        "max_bounces": 8,
+        "sample rate": 4096,
+        "skybox": "textures/belfast_sunset_4k.hdr",
+        "denoiser": true
+    },
+    "materials": {
+        "cannon": {
+            "type": "Microfacet",
+            "base texture": "textures/cannon_base.jpg",
+            "metallic texture": "textures/cannon_metallic.hdr",
+            "normal texture": "textures/cannon_normal.hdr",
+            "roughness texture": "textures/cannon_roughness.hdr"
+        }
+    },
+    "objects": {
+        "barrel": {
+            "mesh": "barrel.obj",
+            "material": "cannon"
+        },
+        "cannonball1": {
+            "mesh": "cannonball1.obj",
+            "material": "cannon"
+        },
+        "cannonball2": {
+            "mesh": "cannonball2.obj",
+            "material": "cannon"
+        },
+        "cannonball3": {
+            "mesh": "cannonball3.obj",
+            "material": "cannon"
+        },
+        "frame": {
+            "mesh": "frame.obj",
+            "material": "cannon"
+        },
+        "pusherblock": {
+            "mesh": "pusherblock.obj",
+            "material": "cannon"
+        },
+        "wheel1": {
+            "mesh": "wheel1.obj",
+            "material": "cannon"
+        },
+        "wheel2": {
+            "mesh": "wheel2.obj",
+            "material": "cannon"
+        },
+        "wheel3": {
+            "mesh": "wheel3.obj",
+            "material": "cannon"
+        },
+        "wheel4": {
+            "mesh": "wheel4.obj",
+            "material": "cannon"
+        }
+    },
+    "camera": {
+        "position": [-110,
+            100,
+            275
+        ],
+        "look at": [
+            0,
+            20,
+            0
+        ],
+        "up": [
+            0.0,
+            1.0,
+            0.0
+        ],
+        "fov": 40
+    }
+}
